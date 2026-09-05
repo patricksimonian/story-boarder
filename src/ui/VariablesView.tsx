@@ -68,8 +68,8 @@ export function VariablesView({
         <h2>Variables</h2>
         <span className="view-sub">
           {registry.variables.length === 0
-            ? 'Nothing declared yet. Conditions and effects can only name variables declared here.'
-            : 'The registry behind every condition and effect — variables.json.'}
+            ? 'Nothing declared yet.'
+            : 'Variables are found in variables.json.'}
         </span>
       </div>
       {registry.variables.length > 0 && (
@@ -163,19 +163,13 @@ export function VariablesView({
           </button>
         </div>
         {error && <p className="eng-problem">{error}</p>}
-        <p className="view-note">
-          A number starts at 0, a boolean at false, an enum at its first value; change the initial in the table.
-          Deleting a variable leaves the expressions that name it as written — Analysis will point at them.
-        </p>
+
       </div>
       {registry.variables.length > 0 && (
         <div className="vars-add">
-          <h3>The ledger — where each variable lives</h3>
-          <p className="view-note">
-            A variable has exactly two moving parts. An <strong>effect writes it</strong> when its scene fires or its
-            choice is taken; a <strong>condition reads it</strong> to open or shut whatever it sits on. Nothing else
-            touches a variable — and one missing either half is inert.
-          </p>
+          <h3>Variable Tracking</h3>
+
+
           {registry.variables.map((v) => {
             const u = usage.get(v.id) ?? { writes: [], reads: [] }
             return (
@@ -187,7 +181,7 @@ export function VariablesView({
                 <LedgerLine
                   label="Set by"
                   sites={u.writes}
-                  empty="nothing — no effect sets it, so it keeps its initial value forever"
+                  empty="nothing"
                   onOpenScene={onOpenScene}
                 />
                 <LedgerLine

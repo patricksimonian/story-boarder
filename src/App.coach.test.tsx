@@ -8,23 +8,17 @@ beforeEach(() => {
   history.replaceState(null, '', '#')
 })
 
+// The lesson list and pattern cards were taken out (2026-09-04); the
+// door stays open for the model coach specified in ticket 11.
 describe('the coach', () => {
-  test('lessons check themselves against the story, with evidence or directions', async () => {
+  test('the Coach view opens and says what it is waiting on', async () => {
     const world = embersWorld()
     render(<App platform={world.platform} />)
     await userEvent.click(await screen.findByRole('button', { name: /open a story folder/i }))
     await screen.findByRole('heading', { name: 'Embers of the Vault' })
     await userEvent.click(screen.getByRole('button', { name: /🧭 coach/i }))
     const view = within(await screen.findByRole('region', { name: /^coach$/i }))
-
-    // Embers declares `trust` and reads it, but nothing writes it.
-    const declare = view.getByRole('listitem', { name: 'Declare a variable — done' })
-    expect(within(declare).getByText(/`trust` is declared/)).toBeInTheDocument()
-    const loop = view.getByRole('listitem', { name: 'Close a loop — to do' })
-    expect(within(loop).getByText(/ledger in the Variables view/i)).toBeInTheDocument()
-
-    // The pattern cards ride below.
-    expect(view.getByText('The counter and the gate')).toBeInTheDocument()
-    expect(view.getByText('Time as an enum')).toBeInTheDocument()
+    expect(view.getByRole('heading', { name: 'Coach' })).toBeInTheDocument()
+    expect(view.getByText(/coming soon/i)).toBeInTheDocument()
   })
 })

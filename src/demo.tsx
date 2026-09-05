@@ -29,6 +29,16 @@ if (params.has('unassigned')) {
   )
 }
 
+// #emptyacts appends two acts with no scenes — long titles on one-column
+// ranges — so the act headers can be checked for running into each other.
+if (params.has('emptyacts')) {
+  void world.files.readText('story.json').then((text) => {
+    const m = JSON.parse(text)
+    m.acts.push({ id: 'the-last-keeper', title: 'The Last Keeper' }, { id: 'elias-promise', title: "Elia's Promise" })
+    void world.files.writeText('story.json', JSON.stringify(m))
+  })
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App platform={world.platform} />

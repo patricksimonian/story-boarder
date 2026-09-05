@@ -86,10 +86,13 @@ export function Minimap({
         <div className="mm-acts" style={{ width }}>
           {/* The no-act range goes unlabeled: at 24px a column can't hold a word, and the
               dashed line before the first act already marks where the acts begin. */}
-          {layout.actRanges.map(({ act, start }) => act && (
+          {layout.actRanges.map(({ act, start, end }) => act && (
+            // A label is confined to its act's columns — an empty act has one,
+            // 24px — and shows an ellipsis rather than running into the next.
             <span
               key={act.id}
-              style={{ left: start * MM_PITCH }}
+              title={act.title}
+              style={{ left: start * MM_PITCH, maxWidth: (end - start + 1) * MM_PITCH - 4 }}
               onClick={() =>
                 scroller.current?.scrollTo({
                   left: Math.max(0, start * BOARD_PITCH - 34),

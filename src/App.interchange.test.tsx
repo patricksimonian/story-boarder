@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, test } from 'vitest'
+import { beforeEach, describe, expect, test, vi } from 'vitest'
 import App from './App'
 import { InMemoryFileAccess, InMemoryJournal, ManualWatcher } from './adapters/stubs'
 import type { OpenedFolder, Platform } from './adapters/types'
@@ -142,13 +142,22 @@ describe('importing Plottr', () => {
 describe('the playable export', () => {
   test('exports into exports/, and the export re-imports losslessly', async () => {
     const world = embersWorld()
+    // A platform that knows where the folder is and can open a file from
+    // it — the desktop shell — gets the whole path, and it's a button.
+    const folder = (await world.platform.pickFolder())!
+    folder.path = 'C:\\stories\\embers'
+    folder.open = vi.fn(async () => {})
     render(<App platform={world.platform} autosaveDelayMs={20} />)
     await userEvent.click(await screen.findByRole('button', { name: /open a story folder/i }))
     await screen.findByRole('heading', { name: 'Embers of the Vault' })
 
     await userEvent.click(screen.getByRole('button', { name: /playable html/i }))
     await screen.findByRole('status')
-    expect(screen.getByRole('status')).toHaveTextContent('exports/embers-of-the-vault.html')
+    const note = screen.getByRole('status')
+    expect(note).toHaveTextContent('Saved the playable file.')
+    expect(note).toHaveTextContent('C:\\stories\\embers\\exports\\embers-of-the-vault.html')
+    await userEvent.click(within(note).getByRole('button', { name: 'C:\\stories\\embers\\exports\\embers-of-the-vault.html' }))
+    expect(folder.open).toHaveBeenCalledWith('exports/embers-of-the-vault.html')
 
     const html = await world.files.readText('exports/embers-of-the-vault.html')
     expect(html).toContain('<title>Embers of the Vault</title>')

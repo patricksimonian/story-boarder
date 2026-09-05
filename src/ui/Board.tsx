@@ -123,7 +123,7 @@ export function Board({
             <span className="b-actsticky">
               {act ? (
                 <>
-                  <button className="b-acthead" onClick={() => onZoomAct(act.id)} aria-label={`Open ${act.title}`}>
+                  <button className="b-acthead" onClick={() => onZoomAct(act.id)} aria-label={`Open ${act.title}`} title={act.title}>
                     <span>{act.title}</span>
                     <span className="zoom">⤢</span>
                   </button>

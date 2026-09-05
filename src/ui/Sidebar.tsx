@@ -14,6 +14,7 @@ export function Sidebar({
   onGoStoryline,
   onEditAct,
   onCheckpoint,
+  onHome,
   variableCount,
   findingCount,
   noteCount,
@@ -35,11 +36,16 @@ export function Sidebar({
   onGoStoryline: (id: string) => void
   onEditAct: (id: string) => void
   onCheckpoint: () => void
+  /** Back to the start screen: this story released, another one a click away. */
+  onHome: () => void
   children?: React.ReactNode
 }) {
   return (
     <aside className="sidebar">
       <h1 className="sb-title">{title}</h1>
+      <button className="sb-item" onClick={onHome} title="Close this story and pick another">
+        ⌂ Home
+      </button>
       <button
         className={`sb-item ${view.level === 'storylines' ? 'active' : ''}`}
         onClick={() => onView({ level: 'storylines' })}

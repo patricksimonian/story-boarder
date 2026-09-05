@@ -51,6 +51,7 @@ import { AnalysisView } from './ui/AnalysisView'
 import { Board } from './ui/Board'
 import { CoachView } from './ui/CoachView'
 import { ConflictView } from './ui/ConflictView'
+import { ExportNote, type ExportState } from './ui/ExportNote'
 import { GraphView } from './ui/GraphView'
 import { CheckpointDialog, HistoryView } from './ui/HistoryView'
 import { ImportDialog, LiftDialog } from './ui/ImportDialogs'
@@ -168,7 +169,7 @@ export default function App({
   const [pullOpen, setPullOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [liftOffers, setLiftOffers] = useState<LiftSuggestion[] | null>(null)
-  const [exportNote, setExportNote] = useState<string | null>(null)
+  const [exportState, setExportState] = useState<ExportState | null>(null)
   const [draft, setDraftState] = useState<Draft | null>(null)
 
   // The draft is read from async work (saves, watcher events) that must
@@ -366,13 +367,20 @@ export default function App({
   /** Compiles the story with the embedded runtime into exports/<slug>.html. */
   async function exportStory(): Promise<void> {
     if (!folder) return
+    setExportState({ kind: 'working' })
     const result = await exportPlayable(folder.files, runtimeJs)
     if (!result.ok) {
-      setExportNote(result.reason)
+      setExportState({ kind: 'failed', reason: result.reason })
       return
     }
-    await folder.files.writeText(`exports/${result.name}.html`, result.html)
-    setExportNote(`Saved exports/${result.name}.html — it plays from anywhere, even file://`)
+    const path = `exports/${result.name}.html`
+    try {
+      await folder.files.writeText(path, result.html)
+    } catch (error) {
+      setExportState({ kind: 'failed', reason: `Could not write ${path}: ${(error as Error).message}` })
+      return
+    }
+    setExportState({ kind: 'saved', path })
   }
 
   /** Saves the remote — owner and repo with the story, the token app-local — then syncs. */
@@ -765,6 +773,38 @@ export default function App({
     boundaryCommit(opened, result.loaded.story.manifest)
   }
 
+  /**
+   * Back to the start screen. Everything the app does when a scene, note,
+   * or page is left — flush the draft, let the boundary commit land —
+   * then the folder is released: the watcher stops with it (the effect
+   * below cleans up), the view resets, and the recents list is read
+   * again so the story just left is at the top of it.
+   */
+  async function goHome(): Promise<void> {
+    if (!folder) return
+    await flush()
+    await flushNote()
+    await flushReference()
+    boundaryCommit()
+    setDraft(null)
+    setNoteDraft(null)
+    setRefDraft(null)
+    setRawEdit(null)
+    setConflict(null)
+    queuedConflicts.current = []
+    setCreating(null)
+    setEditing(null)
+    setPoolOpen(false)
+    setExportState(null)
+    setSyncStatus(null)
+    setStartError(null)
+    setFolder(null)
+    setLoaded(null)
+    setViewState({ level: 'storylines' })
+    history.replaceState(null, '', '#')
+    setRecents(await platform.recents())
+  }
+
   /** Starts a story in the picked folder — bare, or scaffolded from a template — then opens it like any other. */
   async function startNewStory(template?: string): Promise<void> {
     if (!emptyFolder) return
@@ -1086,6 +1126,7 @@ export default function App({
         onGoStoryline={goToStoryline}
         onEditAct={(id) => setEditing({ kind: 'act', id })}
         onCheckpoint={() => setCheckpointOpen(true)}
+        onHome={() => void goHome()}
         variableCount={story.registry.variables.length}
         noteCount={story.notes.size}
         referenceCount={story.references.size}
@@ -1105,11 +1146,7 @@ export default function App({
         <button className="sb-item" onClick={() => void exportStory()}>
           ⬇ Playable HTML
         </button>
-        {exportNote && (
-          <div role="status" className="sb-note">
-            {exportNote}
-          </div>
-        )}
+        {exportState && folder && <ExportNote state={exportState} folder={folder} />}
       </Sidebar>
       <main className="app-main">
         <ProblemsBar

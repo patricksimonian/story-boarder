@@ -92,15 +92,27 @@ describe('TauriFolderWatcher', () => {
 })
 
 describe('tauriPlatform', () => {
-  it('opens a picked folder and remembers it by its path', async () => {
+  it('opens a picked folder, knows its path, and remembers it by that path', async () => {
     const platform = tauriPlatform()
     invoke.mockResolvedValueOnce({ name: 'vault', path: 'C:\\stories\\vault' })
     const folder = await platform.pickFolder()
     expect(folder?.name).toBe('vault')
+    expect(folder?.path).toBe('C:\\stories\\vault')
 
     invoke.mockResolvedValueOnce(undefined)
     await platform.rememberOpened(folder!)
     expect(invoke).toHaveBeenLastCalledWith('remember_opened', { root: 'C:\\stories\\vault' })
+  })
+
+  it('opens and reveals files through the shell', async () => {
+    const platform = tauriPlatform()
+    invoke.mockResolvedValueOnce({ name: 'vault', path: 'C:\\stories\\vault' })
+    const folder = (await platform.pickFolder())!
+    invoke.mockResolvedValue(undefined)
+    await folder.open!('exports/vault.html')
+    expect(invoke).toHaveBeenLastCalledWith('open_path', { root: 'C:\\stories\\vault', path: 'exports/vault.html' })
+    await folder.reveal!('exports/vault.html')
+    expect(invoke).toHaveBeenLastCalledWith('reveal_path', { root: 'C:\\stories\\vault', path: 'exports/vault.html' })
   })
 
   it('resolves null for a dismissed picker and an unknown recent', async () => {

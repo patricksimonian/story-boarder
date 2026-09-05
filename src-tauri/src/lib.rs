@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
+use tauri_plugin_opener::OpenerExt;
 
 #[derive(Default)]
 struct Roots(Mutex<HashSet<PathBuf>>);
@@ -183,6 +184,25 @@ fn delete_entry(roots: State<'_, Roots>, root: String, path: String) -> Result<(
     folder::delete(&opened(&roots, &root)?, &path)
 }
 
+/// Hands a file in an opened folder to whatever Windows opens it with —
+/// for a playable export, the default browser.
+#[tauri::command]
+fn open_path(app: AppHandle, roots: State<'_, Roots>, root: String, path: String) -> Result<(), String> {
+    let target = folder::resolve(&opened(&roots, &root)?, &path)?;
+    app.opener()
+        .open_path(target.to_string_lossy(), None::<&str>)
+        .map_err(|e| format!("Cannot open {path}: {e}"))
+}
+
+/// Shows a file in Explorer with the file selected.
+#[tauri::command]
+fn reveal_path(app: AppHandle, roots: State<'_, Roots>, root: String, path: String) -> Result<(), String> {
+    let target = folder::resolve(&opened(&roots, &root)?, &path)?;
+    app.opener()
+        .reveal_item_in_dir(&target)
+        .map_err(|e| format!("Cannot show {path}: {e}"))
+}
+
 #[tauri::command]
 fn watch_folder(
     app: AppHandle,
@@ -203,6 +223,7 @@ fn unwatch_folder(watchers: State<'_, watch::Watchers>, root: String) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .manage(Roots::default())
         .manage(watch::Watchers::default())
         .invoke_handler(tauri::generate_handler![
@@ -218,6 +239,8 @@ pub fn run() {
             list_folders,
             exists,
             delete_entry,
+            open_path,
+            reveal_path,
             watch_folder,
             unwatch_folder,
         ])

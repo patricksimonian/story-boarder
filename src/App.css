@@ -281,6 +281,12 @@
   grid-row: 1;
   align-self: end;
   min-width: 0;
+  /* An empty act is one column wide and a long title is wider than that;
+     without clipping it runs into the next act's header. `clip`, not
+     `hidden`: hidden would make the cell a scroll container, and the
+     sticky header inside would then stick to the cell instead of the
+     board. */
+  overflow: clip;
 }
 .b-acthead {
   font: inherit;
@@ -1277,6 +1283,8 @@
   color: #b8ac97;
   cursor: pointer;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .mm-acts span:hover {
   color: #f4efe6;
@@ -2096,11 +2104,20 @@
   display: inline-flex;
   align-items: baseline;
   gap: 2px;
+  max-width: 100%;
 }
+/* The title gives way first — an ellipsis, the full title on hover — so
+   the pencil stays reachable in a narrow act. */
 .b-actsticky .b-acthead {
   position: static;
   left: auto;
   z-index: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.b-actsticky .b-actpen {
+  flex-shrink: 0;
 }
 .b-actpen {
   font: inherit;

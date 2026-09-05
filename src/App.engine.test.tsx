@@ -103,7 +103,7 @@ describe('the variables view', () => {
 
     // A half nobody wrote is said plainly.
     const unused = within(view).getByRole('group', { name: 'Ledger for unused' })
-    expect(within(unused).getByText(/no effect sets it/i)).toBeInTheDocument()
+    expect(within(unused).getByText(/^nothing$/)).toBeInTheDocument()
     expect(within(unused).getByText(/no condition reads it/i)).toBeInTheDocument()
 
     // A site is a door to its scene.

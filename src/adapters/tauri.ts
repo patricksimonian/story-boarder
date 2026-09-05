@@ -116,9 +116,12 @@ const roots = new WeakMap<OpenedFolder, string>()
 function asOpenedFolder(info: FolderInfo): OpenedFolder {
   const folder: OpenedFolder = {
     name: info.name,
+    path: info.path,
     files: new TauriFileAccess(info.path),
     watcher: new TauriFolderWatcher(info.path),
     journal: new IdbJournal(info.path),
+    open: (path) => call('open_path', { root: info.path, path }),
+    reveal: (path) => call('reveal_path', { root: info.path, path }),
   }
   roots.set(folder, info.path)
   return folder
