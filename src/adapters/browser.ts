@@ -272,12 +272,25 @@ async function recentRows(): Promise<RecentRow[]> {
 /** The directory handle behind each opened folder, for rememberOpened. */
 const handles = new WeakMap<OpenedFolder, FileSystemDirectoryHandle>()
 
+/**
+ * A browser can't launch a file, but it can show one: the file's text
+ * becomes a blob URL in a new tab. Playable exports are self-contained,
+ * so that tab is the game.
+ */
+async function openInTab(files: FileAccess, path: string): Promise<void> {
+  const text = await files.readText(path)
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/html' }))
+  if (!window.open(url, '_blank')) throw new Error('The browser blocked the new tab — allow pop-ups for this site and try again.')
+}
+
 function asOpenedFolder(name: string, handle: FileSystemDirectoryHandle): OpenedFolder {
+  const files = new FsaFileAccess(handle)
   const folder: OpenedFolder = {
     name,
-    files: new FsaFileAccess(handle),
+    files,
     watcher: new FsaFolderWatcher(handle),
     journal: new IdbJournal(name),
+    open: (path) => openInTab(files, path),
   }
   handles.set(folder, handle)
   return folder

@@ -23,10 +23,9 @@ export function StatsView({ story, onSetGoal }: { story: Story; onSetGoal: (word
     <section className="hist-wrap" role="region" aria-label="Stats">
       <div className="view-bar">
         <h2>Stats</h2>
-        <span className="view-sub">what the writing weighs — prose counted, planning left out</span>
       </div>
       <p>
-        The story holds <strong>{stats.sceneWords} words</strong> of scene prose.
+        The story has <strong>{stats.sceneWords} words</strong> of scene prose.
       </p>
       <label className="notes-sectrow">
         Word goal

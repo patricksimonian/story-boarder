@@ -77,6 +77,16 @@ export interface OpenedFolder {
   files: FileAccess
   watcher: FolderWatcher
   journal: Journal
+  /** Where the folder sits on disk, when the platform can say (a browser can't). */
+  path?: string
+  /**
+   * Opens a file from the folder the way the platform can: the desktop
+   * hands it to whatever Windows opens that kind of file with; the
+   * browser shows it in a new tab. Absent where neither is possible.
+   */
+  open?(path: string): Promise<void>
+  /** Shows the file in the system's file manager. Desktop only. */
+  reveal?(path: string): Promise<void>
 }
 
 /**
