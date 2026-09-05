@@ -1,0 +1,57 @@
+/*
+ * Tailwind owns the base. The paper palette from the approved v4.1
+ * prototype is the theme, so utilities speak it too: bg-paper, text-ink,
+ * border-line, bg-card, text-muted, and friends.
+ *
+ * App.css rides in the components layer — below utilities — so a
+ * Tailwind class on an element always beats the legacy rule it's
+ * overriding. New styling goes in markup as utilities; App.css shrinks
+ * from here, it never grows.
+ */
+@import 'tailwindcss';
+@import './App.css' layer(components);
+
+@theme {
+  --font-sans: system-ui, 'Segoe UI', sans-serif;
+
+  --color-paper: #f5f2ec;
+  --color-ink: #26221c;
+  --color-muted: #7d7568;
+  --color-card: #fffdf9;
+  --color-line: #e0d9cb;
+  --color-shade: #efeadf;
+  --color-pool: #b0a693;
+  --color-chrome: #241e16;
+}
+
+@layer base {
+  :root {
+    /* The short names App.css grew up with, aliased to the theme. */
+    --paper: var(--color-paper);
+    --ink: var(--color-ink);
+    --muted: var(--color-muted);
+    --card: var(--color-card);
+    --line: var(--color-line);
+    --shade: var(--color-shade);
+    --pool: var(--color-pool);
+    --chrome: var(--color-chrome);
+
+    color: var(--ink);
+    background: var(--paper);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-weight: 600;
+  }
+
+  button {
+    font: inherit;
+    cursor: pointer;
+  }
+}
