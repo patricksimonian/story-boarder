@@ -71,8 +71,7 @@ export function StartScreen({
         </section>
       )}
       <p className="start-note">
-        A story folder is any folder with a story.json inside. Your writing stays in that folder —
-        the app only asks the browser for permission to read and write it. Pick an empty folder and
+        A story folder is any folder with a story.json inside. Pick an existing story to get started or an empty folder and
         the app can start a story there.
       </p>
     </main>
