@@ -138,8 +138,27 @@ export interface ReferenceEntity {
   tags: string[]
   /** Attached images — the mood board. Story-folder-relative paths under assets/. */
   images: string[]
+  /** Other strings that name this thing in prose — "the smith", "Rook of Tanner's Row". */
+  aliases: string[]
   body: string
 }
+
+// ---------------------------------------------------------------------------
+// mentions.json — the writer's own verdicts on what a phrase means
+// ---------------------------------------------------------------------------
+
+/** `kind:id` — a character, place, lore page, note, scene, or variable. */
+export type TargetKey = string
+
+export interface Verdict {
+  quote: string
+  /** What the phrase means here, or null: not a mention at all. */
+  entity: TargetKey | null
+  by: 'writer' | 'model'
+}
+
+/** Verdicts per item, the item keyed like a target (`scene:cold-city`, `note:timeline`). */
+export type VerdictStore = Record<TargetKey, Verdict[]>
 
 // ---------------------------------------------------------------------------
 // notes/<slug>.md — the story's notebook: freeform pages, grouped by section
@@ -184,4 +203,6 @@ export interface Story {
   notes: Map<Slug, Note>
   registry: VariableRegistry
   playthroughs: Playthrough[]
+  /** The writer's verdicts from mentions.json; the model's never land here. */
+  verdicts: VerdictStore
 }

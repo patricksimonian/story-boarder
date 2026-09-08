@@ -27,12 +27,14 @@ Spans are fragile; offsets move with every edit. What survives an edit is text, 
 
 ```json
 {
-  "cold-city": [
+  "scene:cold-city": [
     { "quote": "Rook", "entity": null, "by": "writer" },
-    { "quote": "Daila", "entity": "mara", "by": "writer" }
+    { "quote": "Daila", "entity": "character:mara", "by": "writer" }
   ]
 }
 ```
+
+Items and entities are both written `kind:id`, because a note and a character can share a slug.
 
 A verdict applies to every occurrence of that phrase in that item. The writer makes one from the tooltip: "not a mention", "means Mara", "fix the spelling" (which edits the prose through the ordinary mutation and needs no verdict at all). The file is in the story folder because a correction is a human decision about the story, the same footing as an alias. It is small, readable, and a writer who deletes it loses nothing but corrections.
 

@@ -51,7 +51,7 @@ export async function createReference(files: FileAccess, kind: ReferenceKind, ti
   const dir = referenceDir(kind)
   const existing = new Set((await files.list(dir)).map((p) => p.slice(dir.length + 1).replace(/\.md$/, '')))
   const id = slugify(title, (s) => existing.has(s))
-  await files.writeText(`${dir}/${id}.md`, serializeReferenceFile({ kind, id, title, tags: [], images: [], body: '' }))
+  await files.writeText(`${dir}/${id}.md`, serializeReferenceFile({ kind, id, title, tags: [], images: [], aliases: [], body: '' }))
   return id
 }
 

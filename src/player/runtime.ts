@@ -29,6 +29,7 @@ function boot(): void {
     notes: new Map(), // notes are the writer's, not the player's
     registry: data.registry,
     playthroughs: [],
+    verdicts: {},
   }
   const start = suggestedStart(story)
   if (start === undefined) {
