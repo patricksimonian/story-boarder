@@ -21,6 +21,10 @@ export function NotesView({
   onEdit,
   onDelete,
   mentions,
+  canRead = false,
+  reading = false,
+  readProblem = null,
+  onRead,
 }: {
   story: Story
   /** The open note as the draft holds it, or null when none is open. */
@@ -31,6 +35,10 @@ export function NotesView({
   onEdit: (note: Note) => void
   onDelete: () => void
   mentions?: MentionContext
+  canRead?: boolean
+  reading?: boolean
+  readProblem?: string | null
+  onRead?: () => void
 }) {
   const [picked, setPicked] = useState<string | null>(null)
   const [naming, setNaming] = useState<'note' | 'section' | null>(null)
@@ -178,6 +186,23 @@ export function NotesView({
                 ))}
               </select>
             </label>
+            {onRead && (
+              <div className="notes-readrow">
+                <button
+                  type="button"
+                  disabled={!canRead || reading}
+                  title="Sends this note to Claude through your own Claude Code and records what it says about who is in it and what changes"
+                  onClick={onRead}
+                >
+                  {reading ? 'Reading…' : 'Read'}
+                </button>
+                {readProblem && (
+                  <span className="ed-readnote" role="alert">
+                    {readProblem}
+                  </span>
+                )}
+              </div>
+            )}
             <ProseEditor
               key={selected.id}
               markdown={selected.body}

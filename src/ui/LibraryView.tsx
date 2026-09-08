@@ -30,29 +30,70 @@ function TagsField({ entity, onEdit }: { entity: ReferenceEntity; onEdit: (entit
   )
 }
 
-/** Other names the prose uses for this thing — "the smith", "Rook of Tanner's Row" — the same field shape as tags. */
-function AliasesField({ entity, onEdit }: { entity: ReferenceEntity; onEdit: (entity: ReferenceEntity) => void }) {
+/**
+ * Other names the prose uses for this thing — "the smith", "Rook of
+ * Tanner's Row" — the same field shape as tags. Proposals from the scene
+ * read sit after it as ghost chips: a tick adds one through the same
+ * edit typing would make, a cross drops it.
+ */
+function AliasesField({
+  entity,
+  onEdit,
+  proposals,
+  onAccept,
+  onDismiss,
+}: {
+  entity: ReferenceEntity
+  onEdit: (entity: ReferenceEntity) => void
+  proposals: string[]
+  onAccept: (alias: string) => void
+  onDismiss: (alias: string) => void
+}) {
   const [text, setText] = useState(entity.aliases.join(', '))
   return (
-    <label className="notes-sectrow">
-      Also called
-      <input
-        aria-label="Aliases"
-        placeholder="the smith, the old man"
-        title="Other names the prose uses for this; each one lights up as a mention"
-        value={text}
-        onChange={(e) => {
-          setText(e.target.value)
-          onEdit({
-            ...entity,
-            aliases: e.target.value
-              .split(',')
-              .map((a) => a.trim())
-              .filter(Boolean),
-          })
-        }}
-      />
-    </label>
+    <div className="notes-sectrow notes-aliases">
+      <label>
+        Also called
+        <input
+          aria-label="Aliases"
+          placeholder="the smith, the old man"
+          title="Other names the prose uses for this; each one lights up as a mention"
+          value={text}
+          onChange={(e) => {
+            setText(e.target.value)
+            onEdit({
+              ...entity,
+              aliases: e.target.value
+                .split(',')
+                .map((a) => a.trim())
+                .filter(Boolean),
+            })
+          }}
+        />
+      </label>
+      {proposals.length > 0 && (
+        <span className="ghost-chips" aria-label="Proposed aliases">
+          {proposals.map((alias) => (
+            <span key={alias} className="ghost-chip" title="The scene read found this phrase naming this page in more than one place">
+              {alias}
+              <button
+                type="button"
+                aria-label={`Add alias ${alias}`}
+                onClick={() => {
+                  setText([...entity.aliases, alias].join(', '))
+                  onAccept(alias)
+                }}
+              >
+                ✓
+              </button>
+              <button type="button" aria-label={`Dismiss alias ${alias}`} onClick={() => onDismiss(alias)}>
+                ×
+              </button>
+            </span>
+          ))}
+        </span>
+      )}
+    </div>
   )
 }
 
@@ -78,6 +119,9 @@ export function LibraryView({
   onAddImages,
   onDelete,
   mentions,
+  aliasProposals = [],
+  onAcceptAlias = () => {},
+  onDismissAlias = () => {},
 }: {
   story: Story
   files: FileAccess
@@ -90,6 +134,10 @@ export function LibraryView({
   onAddImages: (picked: File[]) => void
   onDelete: () => void
   mentions?: MentionContext
+  /** Phrases the scene read found naming the open page in more than one place. */
+  aliasProposals?: string[]
+  onAcceptAlias?: (alias: string) => void
+  onDismissAlias?: (alias: string) => void
 }) {
   const [picked, setPicked] = useState<ReferenceKind>('character')
   const [naming, setNaming] = useState(false)
@@ -184,7 +232,14 @@ export function LibraryView({
               onChange={(e) => onEdit({ ...selected, title: e.target.value })}
             />
             <TagsField key={`tags-${selected.kind}/${selected.id}`} entity={selected} onEdit={onEdit} />
-            <AliasesField key={`aliases-${selected.kind}/${selected.id}`} entity={selected} onEdit={onEdit} />
+            <AliasesField
+              key={`aliases-${selected.kind}/${selected.id}`}
+              entity={selected}
+              onEdit={onEdit}
+              proposals={aliasProposals}
+              onAccept={onAcceptAlias}
+              onDismiss={onDismissAlias}
+            />
             <ProseEditor
               key={`${selected.kind}/${selected.id}`}
               markdown={selected.body}

@@ -14,10 +14,13 @@ import { exportPlayable, type ExportResult } from './interchange/export'
 import { importToFiles } from './interchange/import'
 import { applySuggestion, type LiftSuggestion } from './interchange/lift'
 import runtimeJs from './player/runtime.generated.js?raw'
+import { aliasProposals, developmentLines, hashText, localLedgerStore, modelVerdicts, storyOrder, type Ledger, type LedgerStore } from './assistant/ledger'
+import { ledgerEntryFrom, readSceneRequest, type ReadSceneOutput } from './assistant/readScene'
+import { run } from './assistant/runner'
 import type { MentionContext } from './mentions/context'
 import { describeTarget } from './mentions/describe'
-import { dictionary, findMentions, mentionIndex } from './mentions/match'
-import { MENTIONS_PATH, parseTargetKey, serializeVerdicts, targetKey, withVerdict } from './mentions/verdicts'
+import { dictionary, findMentions, itemText, mentionIndex } from './mentions/match'
+import { MENTIONS_PATH, parseTargetKey, phraseKey, serializeVerdicts, targetKey, withVerdict } from './mentions/verdicts'
 import { readSceneFromHash, readViewFromHash, viewToHash, type View } from './state/view'
 import { loadStory, type LoadedStory } from './story/loadStory'
 import { applyTemplate } from './story/templates'
@@ -143,6 +146,8 @@ const referencePath = (kind: ReferenceKind, id: Slug) => `${referenceDir(kind)}/
 export default function App({
   platform,
   runner,
+  ledgerStore,
+  readIdleMs = 4000,
   autosaveDelayMs = 1000,
   boundaryIdleMs = 180000,
   makeRemote = (spot: GitHubSpot) => gitHubRemote(spot),
@@ -150,6 +155,10 @@ export default function App({
   platform: Platform
   /** How the writer's own Claude Code gets spawned; absent where nothing can spawn it. */
   runner?: ProcessRunner
+  /** Where the development ledger is kept between sessions; the page's own storage unless a test says otherwise. */
+  ledgerStore?: LedgerStore
+  /** How long after a save the scene read follows. */
+  readIdleMs?: number
   /** How long typing pauses before the disk follows. */
   autosaveDelayMs?: number
   /** How long the folder rests before an idle boundary commit. */
@@ -209,6 +218,38 @@ export default function App({
     setRefDraftState(next)
   }
   const refSaveTimer = useRef<number | undefined>(undefined)
+
+  // The development ledger: what the scene read said about each item,
+  // kept by content hash outside the story folder. Reads run one at a
+  // time after a save, from the Read button, or in sequence for the
+  // whole story from the Coach view.
+  const store = useMemo(() => ledgerStore ?? localLedgerStore(), [ledgerStore])
+  const [ledger, setLedgerState] = useState<Ledger>({})
+  const ledgerRef = useRef<Ledger>({})
+  const setLedger = (next: Ledger) => {
+    ledgerRef.current = next
+    setLedgerState(next)
+  }
+  const loadedRef = useRef<LoadedStory | null>(null)
+  loadedRef.current = loaded
+  const [reading, setReading] = useState<Set<TargetKey>>(new Set())
+  const [readProblem, setReadProblem] = useState<string | null>(null)
+  const [runnerReady, setRunnerReady] = useState(false)
+  const [readingAll, setReadingAll] = useState<{ done: number; total: number } | null>(null)
+  const readAllAbort = useRef<AbortController | null>(null)
+  const readTimer = useRef<number | undefined>(undefined)
+  const [dismissedAliases, setDismissedAliases] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    if (!runner) return
+    let live = true
+    void runner.status().then((status) => {
+      if (live) setRunnerReady(status.kind === 'ready')
+    })
+    return () => {
+      live = false
+    }
+  }, [runner])
+  useEffect(() => () => clearTimeout(readTimer.current), [])
   const findings = useMemo(() => (loaded ? analyse(loaded.story) : []), [loaded])
   // Everything the story names, and everywhere it is named: what the
   // prose editors draw mentions from. Rebuilt when the story reloads.
@@ -217,12 +258,13 @@ export default function App({
   const sceneItem = draft ? targetKey({ kind: 'scene', id: draft.scene.id }) : null
   const noteItem = noteDraft ? targetKey({ kind: 'note', id: noteDraft.note.id }) : null
   const refItem = refDraft ? targetKey(refDraft.entity) : null
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- mentionsFor reads only dict, index, and the loaded story
-  const sceneMentions = useMemo(() => (sceneItem ? mentionsFor(sceneItem) : undefined), [sceneItem, dict, index])
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- mentionsFor reads only dict, index, the ledger, and the loaded story
+  const sceneMentions = useMemo(() => (sceneItem ? mentionsFor(sceneItem) : undefined), [sceneItem, dict, index, ledger])
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const noteMentions = useMemo(() => (noteItem ? mentionsFor(noteItem) : undefined), [noteItem, dict, index])
+  const noteMentions = useMemo(() => (noteItem ? mentionsFor(noteItem) : undefined), [noteItem, dict, index, ledger])
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const refMentions = useMemo(() => (refItem ? mentionsFor(refItem) : undefined), [refItem, dict, index])
+  const refMentions = useMemo(() => (refItem ? mentionsFor(refItem) : undefined), [refItem, dict, index, ledger])
+  const proposals = useMemo(() => (loaded ? aliasProposals(ledger, loaded.story) : new Map<TargetKey, string[]>()), [ledger, loaded])
   const git = useMemo(() => (folder ? folderGit(folder.files) : null), [folder])
   /** Conflicts found at launch, shown one at a time. */
   const queuedConflicts = useRef<JournalConflict[]>([])
@@ -610,10 +652,10 @@ export default function App({
   function mentionsFor(item: TargetKey): MentionContext | undefined {
     if (!loaded || !dict || !index) return undefined
     const { story } = loaded
-    const verdicts = story.verdicts[item] ?? []
+    const verdicts = [...(story.verdicts[item] ?? []), ...modelVerdicts(ledger[item])]
     return {
       find: (text) => findMentions(text, dict, { self: item, verdicts }),
-      describe: (key) => describeTarget(story, key, item, index),
+      describe: (key) => describeTarget(story, key, item, index, developmentLines(ledger, story, key, item)),
       onOpen: (key) => void openTarget(key),
       onVerdict: (quote, entity) => void ruleOnMention(item, quote, entity),
     }
@@ -642,6 +684,71 @@ export default function App({
     const next = withVerdict(loaded.story.verdicts, item, { quote, entity, by: 'writer' })
     await folder.files.writeText(MENTIONS_PATH, serializeVerdicts(next))
     await reload(folder)
+  }
+
+  /**
+   * One scene read. Skipped when the ledger already holds a read of this
+   * exact text, unless the writer pressed the button; a failure is a
+   * sentence beside the button and in the Coach view, never a crash.
+   */
+  async function readItem(item: TargetKey, opts: { force?: boolean; signal?: AbortSignal } = {}): Promise<boolean> {
+    const current = loadedRef.current
+    if (!runner || !folder || !current) return false
+    const { story } = current
+    const text = itemText(story, item)
+    if (text === undefined) return false
+    if (!opts.force && ledgerRef.current[item]?.hash === hashText(text)) return false
+    const dictNow = dictionary(story)
+    const request = readSceneRequest(story, item, dictNow, ledgerRef.current)
+    if (!request) return false
+    setReading((set) => new Set(set).add(item))
+    try {
+      const result = await run<ReadSceneOutput>(runner, request, { signal: opts.signal })
+      const next = { ...ledgerRef.current, [item]: ledgerEntryFrom(result.output, text, dictNow) }
+      setLedger(next)
+      store.save(folder.name, next)
+      setReadProblem(null)
+      return true
+    } catch (error) {
+      setReadProblem((error as Error).message)
+      return false
+    } finally {
+      setReading((set) => {
+        const next = new Set(set)
+        next.delete(item)
+        return next
+      })
+    }
+  }
+
+  /** A read follows a save once typing has rested; only the latest save's read survives. */
+  function scheduleRead(item: TargetKey): void {
+    if (!runner || !runnerReady) return
+    clearTimeout(readTimer.current)
+    readTimer.current = window.setTimeout(() => void readItem(item), readIdleMs)
+  }
+
+  /** Every item in story order, one call each, skipping what the ledger already holds; Cancel stops after the current one. */
+  async function readEverything(): Promise<void> {
+    const current = loadedRef.current
+    if (!current || !runner) return
+    const items = storyOrder(current.story).map(targetKey)
+    const controller = new AbortController()
+    readAllAbort.current = controller
+    setReadingAll({ done: 0, total: items.length })
+    for (let i = 0; i < items.length; i++) {
+      if (controller.signal.aborted) break
+      await readItem(items[i], { signal: controller.signal })
+      setReadingAll({ done: i + 1, total: items.length })
+    }
+    readAllAbort.current = null
+    setReadingAll(null)
+  }
+
+  /** The alias proposals for a library page, less the ones the writer waved away this session. */
+  function proposalsFor(entity: ReferenceEntity): string[] {
+    const key = targetKey(entity)
+    return (proposals.get(key) ?? []).filter((alias) => !dismissedAliases.has(`${key}|${phraseKey(alias)}`))
   }
 
   /** Opens a notebook page, flushing whatever page was open first. */
@@ -691,6 +798,7 @@ export default function App({
     }
     await folder.journal.clear(notePath(current.note.id))
     await reload(folder)
+    scheduleRead(targetKey({ kind: 'note', id: current.note.id }))
   }
 
   /** Opens a library page, flushing whatever page was open first. */
@@ -852,6 +960,8 @@ export default function App({
     setStartError(null)
     setFolder(opened)
     setLoaded(result.loaded)
+    setLedger(store.load(opened.name))
+    setReadProblem(null)
     const { manifest, scenes } = result.loaded.story
     const initialView = readViewFromHash(location.hash, (id: Slug) => manifest.acts.some((a) => a.id === id))
     setViewState(initialView)
@@ -886,6 +996,10 @@ export default function App({
     setRefDraft(null)
     setRawEdit(null)
     setConflict(null)
+    clearTimeout(readTimer.current)
+    readAllAbort.current?.abort()
+    setLedger({})
+    setReadProblem(null)
     queuedConflicts.current = []
     setCreating(null)
     setEditing(null)
@@ -979,6 +1093,7 @@ export default function App({
     }
     await folder.journal.clear(current.path)
     await reload(folder)
+    scheduleRead(targetKey({ kind: 'scene', id: current.scene.id }))
   }
 
   /**
@@ -1271,7 +1386,19 @@ export default function App({
           <ActView story={story} actId={view.act} onView={setView} onOpenScene={onOpenScene} />
         )}
         {view.level === 'graph' && <GraphView story={story} onOpenScene={onOpenScene} />}
-        {view.level === 'coach' && <CoachView story={story} runner={runner} />}
+        {view.level === 'coach' && (
+          <CoachView
+            story={story}
+            runner={runner}
+            ledger={ledger}
+            titleOf={(key) => dict?.targets.get(key)?.title}
+            onOpenScene={onOpenScene}
+            onReadAll={() => void readEverything()}
+            onCancelReadAll={() => readAllAbort.current?.abort()}
+            readingAll={readingAll}
+            readProblem={readProblem}
+          />
+        )}
         {view.level === 'variables' && (
           <VariablesView
             story={story}
@@ -1299,6 +1426,12 @@ export default function App({
             onEdit={editNote}
             onDelete={() => void deleteNoteAction()}
             mentions={noteMentions}
+            canRead={!!runner && runnerReady}
+            reading={noteItem !== null && reading.has(noteItem)}
+            readProblem={readProblem}
+            onRead={() => {
+              if (noteItem) void readItem(noteItem, { force: true })
+            }}
           />
         )}
         {view.level === 'stats' && (
@@ -1333,6 +1466,15 @@ export default function App({
             onAddImages={(picked) => void addImagesToReference(picked)}
             onDelete={() => void deleteReferenceAction()}
             mentions={refMentions}
+            aliasProposals={refDraft ? proposalsFor(refDraft.entity) : []}
+            onAcceptAlias={(alias) => {
+              const current = refDraftRef.current
+              if (current) editReference({ ...current.entity, aliases: [...current.entity.aliases, alias] })
+            }}
+            onDismissAlias={(alias) => {
+              const current = refDraftRef.current
+              if (current) setDismissedAliases((set) => new Set(set).add(`${targetKey(current.entity)}|${phraseKey(alias)}`))
+            }}
           />
         )}
         {view.level === 'sync' && (
@@ -1370,6 +1512,12 @@ export default function App({
           onRestore={(text) => void restoreSceneVersion(text)}
           onAddImages={(picked) => void addImagesToScene(picked)}
           mentions={sceneMentions}
+          canRead={!!runner && runnerReady}
+          reading={sceneItem !== null && reading.has(sceneItem)}
+          readProblem={readProblem}
+          onRead={() => {
+            if (sceneItem) void readItem(sceneItem, { force: true })
+          }}
         />
       )}
       {rawEdit && (

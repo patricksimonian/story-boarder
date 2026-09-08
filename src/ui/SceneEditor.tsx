@@ -29,6 +29,10 @@ export function SceneEditor({
   onRestore,
   onAddImages,
   mentions,
+  canRead = false,
+  reading = false,
+  readProblem = null,
+  onRead,
 }: {
   story: Story
   scene: Scene
@@ -47,6 +51,14 @@ export function SceneEditor({
   onAddImages: (picked: File[]) => void
   /** What the prose names, and what to do about it; absent before a story is loaded. */
   mentions?: MentionContext
+  /** Whether Claude Code can be reached for a read. */
+  canRead?: boolean
+  /** A read of this scene is in flight. */
+  reading?: boolean
+  /** Why the last read failed, when it did. */
+  readProblem?: string | null
+  /** Sends this scene to the read now, whether or not it changed. */
+  onRead?: () => void
 }) {
   const { manifest } = story
   const act = manifest.acts.find((a) => a.id === scene.act)
@@ -103,7 +115,22 @@ export function SceneEditor({
             <button className="ed-histbtn" onClick={() => void toggleHistory()}>
               History
             </button>
+            {onRead && (
+              <button
+                className="ed-histbtn"
+                disabled={!canRead || reading}
+                title="Sends this scene to Claude through your own Claude Code and records what it says about who is in it and what changes"
+                onClick={onRead}
+              >
+                {reading ? 'Reading…' : 'Read'}
+              </button>
+            )}
             {scene.characters.length > 0 && <span className="ed-chips">👤 {scene.characters.join(', ')}</span>}
+            {readProblem && (
+              <span className="ed-readnote" role="alert">
+                {readProblem}
+              </span>
+            )}
           </div>
           {history && (
             <div className="ed-section ed-history">
