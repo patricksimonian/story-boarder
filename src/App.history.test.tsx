@@ -2,8 +2,9 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, test } from 'vitest'
 import App from './App'
+import { InMemoryFileAccess } from './adapters/stubs'
 import { folderGit } from './git/client'
-import { commitAll, init } from './git/repo'
+import { changedSince, commitAll, init } from './git/repo'
 import { embersWorld, type TestWorld } from './test/embers'
 
 beforeEach(() => {
@@ -36,6 +37,22 @@ describe('boundary commits', () => {
     expect((await logOf(world))[0].message).toMatch(/^New story: Embers of the Vault; /)
   })
 
+  test('an image on the mood board is committed and named, never read as text', async () => {
+    // What the desktop shell showed before this was pinned: every
+    // boundary commit failing with "assets/x.png is not UTF-8 text",
+    // for as long as the image stayed uncommitted — which was forever.
+    const world = embersWorld()
+    await world.files.writeBinary('assets/rook.png', new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0xff, 0xfe]))
+    render(<App platform={world.platform} autosaveDelayMs={20} />)
+    await userEvent.click(await screen.findByRole('button', { name: /open a story folder/i }))
+    await screen.findByRole('heading', { name: 'Embers of the Vault' })
+
+    await waitFor(async () => expect(await logOf(world)).toHaveLength(1))
+    // The image is in the commit: nothing in the folder is left uncommitted.
+    expect(await changedSince(world.files, (await logOf(world))[0].id)).toEqual([])
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
   test('closing an edited scene commits it, described', async () => {
     const world = await openEmbers()
     await waitFor(async () => expect(await logOf(world)).toHaveLength(1))
@@ -45,8 +62,12 @@ describe('boundary commits', () => {
     await userEvent.type(within(editor).getByRole('textbox', { name: /synopsis/i }), ' It gets worse.')
     await userEvent.keyboard('{Escape}')
 
-    await waitFor(async () => expect(await logOf(world)).toHaveLength(2))
-    expect((await logOf(world))[0].message).toBe('Edit scene: Cold Open: Lowmarket — synopsis edited')
+    // Opening the scene is a boundary of its own; on a loaded machine its
+    // walk can catch the first keystroke mid-save and commit that. What is
+    // claimed here is the newest commit once the close has landed.
+    await waitFor(async () =>
+      expect((await logOf(world))[0].message).toBe('Edit scene: Cold Open: Lowmarket — synopsis edited'),
+    )
   })
 
   test('switching scenes is a boundary too', async () => {
@@ -58,8 +79,9 @@ describe('boundary commits', () => {
     await userEvent.type(within(editor).getByRole('textbox', { name: /synopsis/i }), ' Then a whistle.')
     await userEvent.click(screen.getAllByRole('button', { name: 'Open scene The Job Offer' })[0])
 
-    await waitFor(async () => expect(await logOf(world)).toHaveLength(2))
-    expect((await logOf(world))[0].message).toBe('Edit scene: Cold Open: Lowmarket — synopsis edited')
+    await waitFor(async () =>
+      expect((await logOf(world))[0].message).toBe('Edit scene: Cold Open: Lowmarket — synopsis edited'),
+    )
   })
 
   test('an untouched close commits nothing', async () => {
@@ -194,5 +216,95 @@ describe('boundary commits', () => {
 
     await waitFor(async () => expect(await logOf(world)).toHaveLength(2), { timeout: 3000 })
     expect((await logOf(world))[0].message).toBe('New storyline: The Long Con')
+  })
+})
+
+/**
+ * A commit that fails must say so. The boundary commits run in the
+ * background, so the sidebar carries the reason until one succeeds;
+ * the checkpoint dialog keeps the reason where the writer is looking.
+ */
+describe('when a commit cannot be written', () => {
+  function worldWithNoRoomForObjects(): TestWorld {
+    const world = embersWorld()
+    // Refs and HEAD are text and still land; every object write fails.
+    world.files.writeBinary = async () => {
+      throw new Error('There is not enough space on the disk')
+    }
+    return world
+  }
+
+  test('the sidebar says why the boundary commit failed, until one succeeds', async () => {
+    const world = worldWithNoRoomForObjects()
+    render(<App platform={world.platform} autosaveDelayMs={20} />)
+    await userEvent.click(await screen.findByRole('button', { name: /open a story folder/i }))
+    await screen.findByRole('heading', { name: 'Embers of the Vault' })
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('Could not commit: There is not enough space on the disk')
+
+    // The disk frees up; the next boundary commits and the note goes.
+    world.files.writeBinary = InMemoryFileAccess.prototype.writeBinary
+    await userEvent.click(screen.getAllByRole('button', { name: 'Open scene Cold Open: Lowmarket' })[0])
+    await screen.findByRole('dialog', { name: /scene editor/i })
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
+    expect(await logOf(world)).toHaveLength(1)
+  })
+
+  test('the checkpoint dialog stays open with the reason', async () => {
+    const world = worldWithNoRoomForObjects()
+    render(<App platform={world.platform} autosaveDelayMs={20} />)
+    await userEvent.click(await screen.findByRole('button', { name: /open a story folder/i }))
+    await screen.findByRole('heading', { name: 'Embers of the Vault' })
+
+    await userEvent.click(screen.getByRole('button', { name: /checkpoint…/i }))
+    const dialog = await screen.findByRole('dialog', { name: /commit a checkpoint/i })
+    await userEvent.type(within(dialog).getByRole('textbox', { name: /message/i }), 'Before the heist')
+    await userEvent.click(within(dialog).getByRole('button', { name: /commit checkpoint/i }))
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'Could not commit: There is not enough space on the disk',
+    )
+    expect(screen.getByRole('dialog', { name: /commit a checkpoint/i })).toBeInTheDocument()
+  })
+})
+
+/**
+ * The desktop window asks before it closes. The app answers the way it
+ * answers leaving a scene: the draft reaches disk and the boundary
+ * commits, so the session's last edits are in history before the
+ * process is gone — not waiting in the journal for the next launch.
+ */
+describe('closing the desktop window', () => {
+  test('flushes the open draft and commits it before the window may go', async () => {
+    const world = embersWorld()
+    let onClose: (() => Promise<void>) | null = null
+    const platform = {
+      ...world.platform,
+      onCloseRequested(handler: () => Promise<void>) {
+        onClose = handler
+        return () => {
+          onClose = null
+        }
+      },
+    }
+    render(<App platform={platform} autosaveDelayMs={60000} />)
+    await userEvent.click(await screen.findByRole('button', { name: /open a story folder/i }))
+    await screen.findByRole('heading', { name: 'Embers of the Vault' })
+    await waitFor(async () => expect(await logOf(world)).toHaveLength(1))
+    expect(onClose).not.toBeNull()
+
+    await userEvent.click(screen.getAllByRole('button', { name: 'Open scene Cold Open: Lowmarket' })[0])
+    const editor = await screen.findByRole('dialog', { name: /scene editor/i })
+    await userEvent.type(within(editor).getByRole('textbox', { name: /synopsis/i }), ' Last words.')
+
+    // With a minute of autosave delay nothing has reached disk yet.
+    expect(await world.files.readText('scenes/cold-open.md')).not.toContain('Last words.')
+    await onClose!()
+    expect(await world.files.readText('scenes/cold-open.md')).toContain('Last words.')
+    const log = await logOf(world)
+    expect(log).toHaveLength(2)
+    expect(log[0].message).toBe('Edit scene: Cold Open: Lowmarket — synopsis edited')
   })
 })

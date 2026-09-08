@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Storyline",
-  "version": "0.1.0",
+  "productName": "Story Boarder",
+  "version": "../package.json",
   "identifier": "io.github.patricksimonian.storyline",
   "build": {
     "frontendDist": "../dist",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Storyline",
+        "title": "Story Boarder",
         "width": 1400,
         "height": 900,
         "minWidth": 900,

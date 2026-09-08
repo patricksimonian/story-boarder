@@ -59,6 +59,21 @@ describe('collectSource and exportPlayable', () => {
     expect(await collectSource(files)).toEqual(SOURCE)
   })
 
+  it('carries text, non-ASCII included, and leaves files that are not text out', async () => {
+    const files = new InMemoryFileAccess()
+    for (const [path, text] of Object.entries(SOURCE)) await files.writeText(path, text)
+    await files.writeText('notes/josé.md', '# José — “quotes” and an em dash\n')
+    // A PNG header: bytes no UTF-8 decoder accepts. The browser used to
+    // decode it lossily into the island; the desktop shell refuses to
+    // read it as text at all. Neither is what an export is for.
+    await files.writeBinary('assets/pic.png', new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0xff, 0xfe]))
+
+    const source = await collectSource(files)
+    expect(source['notes/josé.md']).toBe('# José — “quotes” and an em dash\n')
+    expect(source).not.toHaveProperty('assets/pic.png')
+    expect(Object.keys(source).sort()).toEqual([...Object.keys(SOURCE), 'notes/josé.md'].sort())
+  })
+
   it('exports a story folder end to end, and the export re-imports losslessly', async () => {
     const files = new InMemoryFileAccess()
     for (const [path, text] of Object.entries(SOURCE)) await files.writeText(path, text)

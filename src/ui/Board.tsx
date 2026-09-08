@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { dropPlacement, type Dragging } from '../board/drop'
+import { boardGeometry, columnAt, pixelOf } from '../board/geometry'
 import { laneIndexes, layoutBoard } from '../board/layout'
 import type { Slug, Story } from '../domain/types'
 import type { Placement } from '../story/mutations'
 import { Glyph, SceneBadges } from './SceneBadges'
 import { openSceneProps } from './sceneCard'
 
-const COL_WIDTH = 150
-const COL_GAP = 10
-const PITCH = COL_WIDTH + COL_GAP
 const LANE_HEIGHT = 104
 
 /** Where a drag is hovering: the lane, the act (null in the no-act range), and the column boundary the scene would slot into. */
@@ -54,10 +52,11 @@ export function Board({
 }) {
   const { manifest, scenes } = story
   const layout = useMemo(() => layoutBoard(manifest, scenes), [manifest, scenes])
+  const geometry = useMemo(() => boardGeometry(layout), [layout])
   const [hover, setHover] = useState<Hover | null>(null)
 
   const gridStyle = {
-    gridTemplateColumns: `150px repeat(${layout.columnCount}, ${COL_WIDTH}px)`,
+    gridTemplateColumns: `150px ${geometry.widths.map((w) => `${w}px`).join(' ')}`,
     gridTemplateRows: `34px repeat(${manifest.storylines.length}, ${LANE_HEIGHT}px)`,
   }
 
@@ -79,9 +78,9 @@ export function Board({
     return () => el.removeEventListener('scroll', mark)
   }, [scrollerRef])
 
-  /** Fractional column under the pointer, for a zone starting at `start`. */
+  /** Fractional column under the pointer, for a zone starting at column `start`. */
   const positionIn = (e: React.DragEvent<HTMLElement>, start: number) =>
-    start + (e.clientX - e.currentTarget.getBoundingClientRect().left) / PITCH
+    columnAt(geometry, pixelOf(geometry, start) + e.clientX - e.currentTarget.getBoundingClientRect().left)
 
   const dropOn = (e: React.DragEvent<HTMLElement>, lane: Slug, act: Slug | null, start: number) => {
     e.preventDefault()

@@ -27,8 +27,13 @@ pub fn resolve(root: &Path, rel: &str) -> Result<PathBuf, String> {
     Ok(out)
 }
 
+/// A file's text. A file that exists but isn't UTF-8 — an image, say —
+/// is refused with its own message, so the app can tell "not there"
+/// from "not text" (the browser build decodes such a file lossily; the
+/// app's own callers never want that).
 pub fn read_text(root: &Path, rel: &str) -> Result<String, String> {
-    fs::read_to_string(resolve(root, rel)?).map_err(|e| format!("No file at {rel}: {e}"))
+    let bytes = fs::read(resolve(root, rel)?).map_err(|e| format!("No file at {rel}: {e}"))?;
+    String::from_utf8(bytes).map_err(|_| format!("{rel} is not UTF-8 text"))
 }
 
 pub fn read_binary(root: &Path, rel: &str) -> Result<Vec<u8>, String> {
@@ -173,6 +178,15 @@ mod tests {
         assert_eq!(list_files(&root, "nowhere").unwrap(), Vec::<String>::new());
         assert!(exists(&root, "scenes/a.md").unwrap());
         assert!(!exists(&root, "scenes").unwrap());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn reading_bytes_that_are_not_text_says_so() {
+        let root = temp_root("nottext");
+        write_atomic(&root, "assets/pic.png", &[0x89, b'P', b'N', b'G', 0xff, 0xfe]).unwrap();
+        assert_eq!(read_text(&root, "assets/pic.png").unwrap_err(), "assets/pic.png is not UTF-8 text");
+        assert!(read_text(&root, "assets/gone.png").unwrap_err().starts_with("No file at assets/gone.png"));
         fs::remove_dir_all(root).unwrap();
     }
 

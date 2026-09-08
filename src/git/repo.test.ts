@@ -160,6 +160,21 @@ describe('changedSince', () => {
     expect(changes).toHaveLength(2)
   })
 
+  it('names an image among the changes without reading it as text', async () => {
+    // The desktop shell refuses to read a PNG as text; the in-memory
+    // fake does the same, so this would throw if the walk asked.
+    const files = await fixtureFolder()
+    await commitAll(files, 'First commit', IDENT, { time: 1700000000 })
+    await files.writeBinary('assets/pic.png', new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0xff, 0xfe]))
+    const changes = await changedSince(files, FIRST)
+    expect(changes.map((c) => c.path)).toEqual(['assets/pic.png'])
+    expect(changes[0].before).toBeNull()
+    expect(typeof changes[0].after).toBe('string')
+    const sha = await commitAll(files, 'Add assets/pic.png', IDENT, { time: 1700000100 })
+    expect(sha).not.toBeNull()
+    expect(await changedSince(files, sha!)).toEqual([])
+  })
+
   it('reports nothing for an untouched folder — .git included', async () => {
     const files = await fixtureFolder()
     await commitAll(files, 'First commit', IDENT, { time: 1700000000 })

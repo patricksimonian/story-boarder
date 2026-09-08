@@ -112,4 +112,10 @@ export interface Platform {
   openRecent(name: string): Promise<OpenedFolder | null>
   /** Records a folder that opened successfully, for the recents list. */
   rememberOpened(folder: OpenedFolder): Promise<void>
+  /**
+   * Lets the app finish its work — flush drafts, commit the boundary —
+   * before the window closes; the window waits on the handler. Desktop
+   * only: a browser tab gives no such promise. Returns an unsubscribe.
+   */
+  onCloseRequested?(handler: () => Promise<void>): () => void
 }

@@ -206,13 +206,18 @@ export async function changedSince(files: FileAccess, commitSha: string | null):
   const changes: FileChange[] = []
   const present = await worktreePaths(files)
   for (const path of present) {
-    const now = await hashObject('blob', await files.readBinary(path))
+    // One read serves both the hash and the text. The text is decoded
+    // the way readFileAt decodes the other side: leniently, because an
+    // image under assets/ is a change worth naming and never worth
+    // reading — and the desktop shell refuses to read it as text.
+    const bytes = await files.readBinary(path)
+    const now = await hashObject('blob', bytes)
     const then = commitSha ? await blobShaAt(files, commitSha, path) : null
     if (now === then) continue
     changes.push({
       path,
       before: commitSha && then ? await readFileAt(files, commitSha, path) : null,
-      after: await files.readText(path),
+      after: new TextDecoder().decode(bytes),
     })
   }
   if (commitSha) {

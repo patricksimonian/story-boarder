@@ -58,11 +58,18 @@ export function CheckpointDialog({
 }) {
   const [message, setMessage] = useState('')
   const [nothingNew, setNothingNew] = useState(false)
+  const [problem, setProblem] = useState<string | null>(null)
 
   const commit = async () => {
-    const sha = await onCommit(message.trim() === '' ? 'Checkpoint' : message.trim())
-    if (sha === null) setNothingNew(true)
-    else onClose()
+    setProblem(null)
+    try {
+      const sha = await onCommit(message.trim() === '' ? 'Checkpoint' : message.trim())
+      if (sha === null) setNothingNew(true)
+      else onClose()
+    } catch (error) {
+      // The dialog stays up with the reason; closing it would read as success.
+      setProblem(`Could not commit: ${(error as Error).message}`)
+    }
   }
 
   return (
@@ -84,6 +91,11 @@ export function CheckpointDialog({
         />
       </label>
       {nothingNew && <p className="hist-empty">Nothing new since the last commit.</p>}
+      {problem && (
+        <p role="alert" className="text-red-700">
+          {problem}
+        </p>
+      )}
       <div className="create-actions">
         <button type="button" onClick={() => void commit()}>
           Commit checkpoint

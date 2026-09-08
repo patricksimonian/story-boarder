@@ -1,5 +1,6 @@
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import { IdbJournal } from './browser'
 import type {
   FileAccess,
@@ -110,6 +111,29 @@ export class TauriFolderWatcher implements FolderWatcher {
   }
 }
 
+/**
+ * Whatever the page fails to catch — an uncaught error, a promise nobody
+ * handled — goes to the shell's log file as well as the console, which
+ * a release build has no window onto. Returns the uninstaller.
+ */
+export function forwardErrorsToShell(target: Window = window): () => void {
+  const report = (label: string, error: unknown) => {
+    const detail = error instanceof Error ? (error.stack ?? error.message) : String(error)
+    void invoke('log_error', { message: `${label}: ${detail}` }).catch(() => {})
+  }
+  const onError = (event: ErrorEvent) => report('Uncaught', event.error ?? event.message)
+  const onRejection = (event: PromiseRejectionEvent) => report('Unhandled rejection', event.reason)
+  target.addEventListener('error', onError)
+  target.addEventListener('unhandledrejection', onRejection)
+  return () => {
+    target.removeEventListener('error', onError)
+    target.removeEventListener('unhandledrejection', onRejection)
+  }
+}
+
+/** How long the window waits on the app's closing work before it closes anyway. */
+const CLOSE_GRACE_MS = 10000
+
 /** The absolute path behind each opened folder, for rememberOpened. */
 const roots = new WeakMap<OpenedFolder, string>()
 
@@ -151,6 +175,24 @@ export function tauriPlatform(): Platform {
     async rememberOpened(folder) {
       const root = roots.get(folder)
       if (root) await call('remember_opened', { root }).catch(() => {})
+    },
+
+    /**
+     * With a listener on close-requested the window stays open until
+     * the listener returns; then it's destroyed. A handler that fails or
+     * hangs must not hold the window hostage, so both are bounded.
+     */
+    onCloseRequested(handler) {
+      let stopped = false
+      const unlisten = getCurrentWindow().onCloseRequested(async () => {
+        if (stopped) return
+        const grace = new Promise<void>((resolve) => setTimeout(resolve, CLOSE_GRACE_MS))
+        await Promise.race([handler().catch(() => {}), grace])
+      })
+      return () => {
+        stopped = true
+        void unlisten.then((off) => off())
+      }
     },
   }
 }

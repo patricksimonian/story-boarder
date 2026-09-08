@@ -11,14 +11,27 @@ import type {
   JournalEntry,
 } from './types'
 
+/**
+ * Reads as text the way the stricter of the two real platforms does: the
+ * desktop shell refuses a file that is not UTF-8 (the browser decodes it
+ * lossily), so a fake that refused nothing would hide exactly the reads
+ * that fail on the desktop.
+ */
+const strictUtf8 = new TextDecoder('utf-8', { fatal: true })
+
 export class InMemoryFileAccess implements FileAccess {
   private files = new Map<string, string | Uint8Array>()
 
   async readText(path: string): Promise<string> {
     const contents = this.files.get(path)
     if (contents === undefined) throw new Error(`No text file at ${path}`)
+    if (typeof contents === 'string') return contents
     // A real disk holds bytes either way; readText decodes what writeBinary stored.
-    return typeof contents === 'string' ? contents : new TextDecoder().decode(contents)
+    try {
+      return strictUtf8.decode(contents)
+    } catch {
+      throw new Error(`${path} is not UTF-8 text`)
+    }
   }
 
   async writeText(path: string, contents: string): Promise<void> {

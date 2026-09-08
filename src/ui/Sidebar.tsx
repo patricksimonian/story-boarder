@@ -14,6 +14,7 @@ export function Sidebar({
   onGoStoryline,
   onEditAct,
   onCheckpoint,
+  commitProblem = null,
   onHome,
   variableCount,
   findingCount,
@@ -36,6 +37,8 @@ export function Sidebar({
   onGoStoryline: (id: string) => void
   onEditAct: (id: string) => void
   onCheckpoint: () => void
+  /** Why the last commit failed, or null while history is keeping up. */
+  commitProblem?: string | null
   /** Back to the start screen: this story released, another one a click away. */
   onHome: () => void
   children?: React.ReactNode
@@ -169,6 +172,11 @@ export function Sidebar({
       <button className="sb-item" onClick={onCheckpoint}>
         ⚑ Checkpoint…
       </button>
+      {commitProblem && (
+        <div role="alert" className="sb-note text-red-700">
+          {commitProblem}
+        </div>
+      )}
       <button className={`sb-item ${view.level === 'sync' ? 'active' : ''}`} onClick={() => onView({ level: 'sync' })}>
         ⇅ Sync
       </button>
@@ -178,6 +186,8 @@ export function Sidebar({
         <br />⤢ opens an act
         <br />wheel over the minimap scrolls the story
         <br />drag a scene to move it · Ctrl+drag shares it
+        <br />
+        <span className="opacity-70">Story Boarder v{__APP_VERSION__}</span>
       </div>
     </aside>
   )

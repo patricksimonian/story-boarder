@@ -10,7 +10,7 @@ import { reconcileJournal, type JournalConflict } from './editor/reconcile'
 import { DEFAULT_IDENT, folderGit } from './git/client'
 import { gitHubRemote, type GitHubSpot } from './git/github'
 import { completeMerge, sync as syncStory, type Remote } from './git/sync'
-import { exportPlayable } from './interchange/export'
+import { exportPlayable, type ExportResult } from './interchange/export'
 import { importToFiles } from './interchange/import'
 import { applySuggestion, type LiftSuggestion } from './interchange/lift'
 import runtimeJs from './player/runtime.generated.js?raw'
@@ -18,6 +18,7 @@ import { readSceneFromHash, readViewFromHash, viewToHash, type View } from './st
 import { loadStory, type LoadedStory } from './story/loadStory'
 import { applyTemplate } from './story/templates'
 import type { Dragging } from './board/drop'
+import { boardGeometry, pixelOf } from './board/geometry'
 import { layoutBoard } from './board/layout'
 import {
   addNotebookSection,
@@ -71,8 +72,6 @@ import { StatsView } from './ui/StatsView'
 import { Sidebar } from './ui/Sidebar'
 import { StartScreen } from './ui/StartScreen'
 import { VariablesView } from './ui/VariablesView'
-
-const BOARD_PITCH = 160
 
 const TOKEN_KEY = 'storyline-app:github-token'
 
@@ -166,6 +165,8 @@ export default function App({
   const [dragging, setDragging] = useState<Dragging | null>(null)
   const [checkpointOpen, setCheckpointOpen] = useState(false)
   const [syncStatus, setSyncStatus] = useState<string | null>(null)
+  /** Why the last commit failed, shown beside History until one succeeds. */
+  const [commitProblem, setCommitProblem] = useState<string | null>(null)
   const [pullOpen, setPullOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [liftOffers, setLiftOffers] = useState<LiftSuggestion[] | null>(null)
@@ -218,19 +219,26 @@ export default function App({
    * A natural boundary: commit whatever the folder holds, under a
    * generated message. Commits are serialized through one queue so a
    * fast scene-switch can't race the open-time sweep; a declined commit
-   * (nothing changed) costs a hash walk and writes nothing.
+   * (nothing changed) costs a hash walk and writes nothing. A commit
+   * that fails says so in the sidebar; a sync that fails says so in the
+   * Sync view — neither is allowed to vanish.
    */
   const commitQueue = useRef(Promise.resolve())
   /** Set while a pulled divergence waits on the writer; the remote head to merge with. */
   const pendingMergeHead = useRef<string | null>(null)
+  const commitFailed = (error: unknown) => setCommitProblem(`Could not commit: ${(error as Error).message}`)
+  const syncFailed = (error: unknown) => setSyncStatus(`Sync failed: ${(error as Error).message}`)
   function boundaryCommit(target: OpenedFolder | null = folder, manifest = loaded?.story.manifest): void {
     if (!target) return
     const { files } = target
     const spot = spotFrom(manifest)
     commitQueue.current = commitQueue.current
       .then(() => folderGit(files).commitBoundary())
-      .then(() => (spot ? performSync(target, spot) : undefined))
-      .then(() => undefined, () => undefined)
+      .then(() => {
+        setCommitProblem(null)
+        return spot ? performSync(target, spot) : undefined
+      }, commitFailed)
+      .then(() => undefined, syncFailed)
   }
 
   // A few minutes of quiet after the last disk change is a boundary too.
@@ -247,13 +255,29 @@ export default function App({
     const spot = spotFrom(loaded?.story.manifest)
     const run = commitQueue.current.then(() => folderGit(target.files).checkpoint(message))
     commitQueue.current = run
-      .then((sha) => (sha && spot ? performSync(target, spot) : undefined))
-      .then(
-        () => undefined,
-        () => undefined,
-      )
+      .then((sha) => {
+        setCommitProblem(null)
+        return sha && spot ? performSync(target, spot) : undefined
+      }, commitFailed)
+      .then(() => undefined, syncFailed)
     return run
   }
+
+  // The desktop window waits for this before it closes: what leaving a
+  // scene or going home does, so the last edits of a session reach disk
+  // and history rather than waiting in the journal for the next launch.
+  const onCloseRef = useRef<() => Promise<void>>(async () => {})
+  useEffect(() => {
+    onCloseRef.current = async () => {
+      if (!folder) return
+      await flush()
+      await flushNote()
+      await flushReference()
+      boundaryCommit()
+      await commitQueue.current
+    }
+  })
+  useEffect(() => platform.onCloseRequested?.(() => onCloseRef.current()), [platform])
 
   /** Runs one sync and turns the outcome into words for the Sync view. */
   async function performSync(target: OpenedFolder, spot: GitHubSpot): Promise<void> {
@@ -368,7 +392,15 @@ export default function App({
   async function exportStory(): Promise<void> {
     if (!folder) return
     setExportState({ kind: 'working' })
-    const result = await exportPlayable(folder.files, runtimeJs)
+    let result: ExportResult
+    try {
+      result = await exportPlayable(folder.files, runtimeJs)
+    } catch (error) {
+      // A read the folder refused, most likely. The alternative was
+      // "Compiling the story…" for good, and that is what it did once.
+      setExportState({ kind: 'failed', reason: `Could not export: ${(error as Error).message}` })
+      return
+    }
     if (!result.ok) {
       setExportState({ kind: 'failed', reason: result.reason })
       return
@@ -947,7 +979,8 @@ export default function App({
     const el = boardScrollerRef.current
     if (!el) return
     const layout = layoutBoard(loaded.story.manifest, loaded.story.scenes)
-    const offsets = layout.actRanges.map(({ start }) => Math.max(0, start * BOARD_PITCH - 34))
+    const geometry = boardGeometry(layout)
+    const offsets = layout.actRanges.map(({ start }) => Math.max(0, pixelOf(geometry, start) - 34))
     const current = el.scrollLeft
     let target: number | undefined
     if (direction > 0) target = offsets.find((o) => o > current + 10)
@@ -1126,6 +1159,7 @@ export default function App({
         onGoStoryline={goToStoryline}
         onEditAct={(id) => setEditing({ kind: 'act', id })}
         onCheckpoint={() => setCheckpointOpen(true)}
+        commitProblem={commitProblem}
         onHome={() => void goHome()}
         variableCount={story.registry.variables.length}
         noteCount={story.notes.size}

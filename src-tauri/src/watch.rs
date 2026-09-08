@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{mpsc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Runtime};
 
 pub const EVENT: &str = "folder-changed";
 const SETTLE: Duration = Duration::from_millis(250);
@@ -37,7 +37,7 @@ pub fn relative(root: &Path, path: &Path) -> Option<String> {
     Some(parts.join("/"))
 }
 
-pub fn start(app: AppHandle, watchers: &Watchers, root: PathBuf) -> Result<(), String> {
+pub fn start<R: Runtime>(app: AppHandle<R>, watchers: &Watchers, root: PathBuf) -> Result<(), String> {
     let mut map = watchers.0.lock().map_err(|e| e.to_string())?;
     if map.contains_key(&root) {
         return Ok(());
@@ -64,7 +64,7 @@ pub fn stop(watchers: &Watchers, root: &Path) {
     }
 }
 
-fn pump(app: AppHandle, root: PathBuf, rx: mpsc::Receiver<notify::Result<notify::Event>>) {
+fn pump<R: Runtime>(app: AppHandle<R>, root: PathBuf, rx: mpsc::Receiver<notify::Result<notify::Event>>) {
     let collect = |event: notify::Result<notify::Event>, into: &mut BTreeSet<String>| {
         if let Ok(event) = event {
             for path in event.paths {

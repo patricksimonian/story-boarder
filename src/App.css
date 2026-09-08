@@ -281,11 +281,11 @@
   grid-row: 1;
   align-self: end;
   min-width: 0;
-  /* An empty act is one column wide and a long title is wider than that;
-     without clipping it runs into the next act's header. `clip`, not
-     `hidden`: hidden would make the cell a scroll container, and the
-     sticky header inside would then stick to the cell instead of the
-     board. */
+  /* The act's columns are sized to hold the header (boardGeometry), so
+     nothing should overflow; if a font ever runs wider than measured,
+     clip rather than run into the next act. `clip`, not `hidden`:
+     hidden would make the cell a scroll container, and the sticky header
+     inside would then stick to the cell instead of the board. */
   overflow: clip;
 }
 .b-acthead {
@@ -2106,8 +2106,9 @@
   gap: 2px;
   max-width: 100%;
 }
-/* The title gives way first — an ellipsis, the full title on hover — so
-   the pencil stays reachable in a narrow act. */
+/* Never expected to trigger — the act is at least as wide as its header
+   — but should it, the title gives way first (an ellipsis, the full title
+   on hover) so the pencil stays reachable. */
 .b-actsticky .b-acthead {
   position: static;
   left: auto;

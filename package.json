@@ -13,6 +13,7 @@
     "build:runtime": "node scripts/build-runtime.mjs",
     "desktop": "tauri dev",
     "desktop:build": "tauri build",
+    "desktop:smoke": "node scripts/desktop-smoke.mjs",
     "tauri": "tauri",
     "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml"
   },

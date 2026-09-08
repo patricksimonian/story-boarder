@@ -13,7 +13,7 @@ const emptyPlatform: Platform = {
 test('the shell opens with the app name and no story folder', async () => {
   render(<App platform={emptyPlatform} />)
 
-  expect(screen.getByRole('heading', { name: 'Storyline App' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: 'Story Boarder' })).toBeInTheDocument()
   expect(screen.getByText(/no story folder open/i)).toBeInTheDocument()
   expect(await screen.findByRole('button', { name: /open a story folder/i })).toBeInTheDocument()
 })

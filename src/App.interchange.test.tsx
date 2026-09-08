@@ -140,6 +140,24 @@ describe('importing Plottr', () => {
 })
 
 describe('the playable export', () => {
+  test('a read the folder refuses ends the export with the reason, not a spinner', async () => {
+    const world = embersWorld()
+    await world.files.writeBinary('assets/locked.png', new Uint8Array([1, 2, 3]))
+    const readBinary = world.files.readBinary.bind(world.files)
+    world.files.readBinary = async (path) => {
+      if (path === 'assets/locked.png') throw new Error('assets/locked.png is not UTF-8 text')
+      return readBinary(path)
+    }
+    render(<App platform={world.platform} autosaveDelayMs={20} />)
+    await userEvent.click(await screen.findByRole('button', { name: /open a story folder/i }))
+    await screen.findByRole('heading', { name: 'Embers of the Vault' })
+
+    await userEvent.click(screen.getByRole('button', { name: /playable html/i }))
+    const note = await screen.findByRole('status')
+    await waitFor(() => expect(note).toHaveTextContent('Could not export: assets/locked.png is not UTF-8 text'))
+    expect(await world.files.list('exports')).toEqual([])
+  })
+
   test('exports into exports/, and the export re-imports losslessly', async () => {
     const world = embersWorld()
     // A platform that knows where the folder is and can open a file from

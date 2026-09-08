@@ -68,12 +68,30 @@ export function playableToStoryFiles(html: string): Record<string, string> | nul
   }
 }
 
-/** Every file in the folder as path → text, the repository excluded. */
+/** Decodes UTF-8 strictly: a file that isn't text comes back null. */
+const strictUtf8 = new TextDecoder('utf-8', { fatal: true })
+function asText(bytes: Uint8Array): string | null {
+  try {
+    return strictUtf8.decode(bytes)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Every text file in the folder as path → text, the repository excluded.
+ * Files that aren't UTF-8 text — the mood board's images under assets/ —
+ * stay out: the island exists so an export re-imports losslessly, and
+ * bytes read as text never came back as the same bytes. (The browser's
+ * lossy decode used to bloat an export by megabytes per image; the
+ * desktop shell refuses to read such a file as text at all.)
+ */
 export async function collectSource(files: FileAccess, dir = ''): Promise<Record<string, string>> {
   const source: Record<string, string> = {}
   for (const path of await files.list(dir)) {
     if (path.endsWith('.crswap')) continue // Chromium's swap files are not story content
-    source[path] = await files.readText(path)
+    const text = asText(await files.readBinary(path))
+    if (text !== null) source[path] = text
   }
   for (const folder of await files.listFolders(dir)) {
     // exports/ is derived output — embedding old exports in new ones

@@ -26,8 +26,11 @@ describe('going home', () => {
       },
     }
     render(<App platform={platform} autosaveDelayMs={20} />)
+    // The version from package.json shows on the start screen and in the sidebar.
+    expect(screen.getByText(/^v\d+\.\d+\.\d+$/)).toBeInTheDocument()
     await userEvent.click(await screen.findByRole('button', { name: /open a story folder/i }))
     await screen.findByRole('heading', { name: 'Embers of the Vault' })
+    expect(screen.getByText(/^Story Boarder v\d+\.\d+\.\d+$/)).toBeInTheDocument()
 
     // An edit in flight when Home is clicked lands on disk first.
     await userEvent.click(screen.getByText('Cold Open: Lowmarket'))

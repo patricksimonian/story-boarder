@@ -48,6 +48,15 @@ jobs:
         with:
           workspaces: src-tauri
 
+      - name: The tag must match package.json
+        shell: bash
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "$RELEASE_TAG" != "v$version" ]; then
+            echo "Tag $RELEASE_TAG does not match package.json version $version — bump package.json (pnpm version <x.y.z>) and tag again."
+            exit 1
+          fi
+
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm test
@@ -60,7 +69,7 @@ jobs:
         id: unsigned
         uses: actions/upload-artifact@v4
         with:
-          name: storyline-windows-unsigned
+          name: story-boarder-windows-unsigned
           path: src-tauri/target/release/bundle/nsis/*.exe
           if-no-files-found: error
 
@@ -81,9 +90,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # The product name has a space in it, so the installer's name does too:
+          # let the shell expand the glob straight into the arguments.
           if [ -d signed ]; then
-            files=$(ls signed/*.exe)
+            gh release upload "$RELEASE_TAG" signed/*.exe --clobber
           else
-            files=$(ls src-tauri/target/release/bundle/nsis/*.exe)
+            gh release upload "$RELEASE_TAG" src-tauri/target/release/bundle/nsis/*.exe --clobber
           fi
-          gh release upload "$RELEASE_TAG" $files --clobber

@@ -44,7 +44,7 @@ export function ExportNote({ state, folder }: { state: ExportState; folder: Open
           type="button"
           title="Open it"
           onClick={() => run(folder.open!)}
-          className="cursor-pointer break-all border-0 bg-transparent p-0 text-left font-mono text-[11px] text-ink underline decoration-dotted underline-offset-2 hover:decoration-solid"
+          className="text-white cursor-pointer break-all border-0 bg-transparent p-0 text-left font-mono text-[11px] text-ink underline decoration-dotted underline-offset-2 hover:decoration-solid"
         >
           {shown}
         </button>
@@ -55,12 +55,11 @@ export function ExportNote({ state, folder }: { state: ExportState; folder: Open
         <button
           type="button"
           onClick={() => run(folder.reveal!)}
-          className="cursor-pointer self-start border-0 bg-transparent p-0 text-left underline decoration-dotted underline-offset-2 hover:decoration-solid"
+          className="text-white cursor-pointer self-start border-0 bg-transparent p-0 text-left underline decoration-dotted underline-offset-2 hover:decoration-solid"
         >
           Show in folder
         </button>
       )}
-      <span>It plays from anywhere, even file://</span>
       {problem && <span className="text-red-700">{problem}</span>}
     </div>
   )

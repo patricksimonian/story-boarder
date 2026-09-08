@@ -21,12 +21,27 @@ vi.mock('@tauri-apps/api/event', () => ({
   },
 }))
 
-const { TauriFileAccess, TauriFolderWatcher, tauriPlatform } = await import('./tauri')
+type CloseEvent = { preventDefault: () => void }
+const closeListeners: ((event: CloseEvent) => Promise<void>)[] = []
+const unlistenClose = vi.fn()
+
+vi.mock('@tauri-apps/api/window', () => ({
+  getCurrentWindow: () => ({
+    onCloseRequested: (handler: (event: CloseEvent) => Promise<void>) => {
+      closeListeners.push(handler)
+      return Promise.resolve(unlistenClose)
+    },
+  }),
+}))
+
+const { TauriFileAccess, TauriFolderWatcher, forwardErrorsToShell, tauriPlatform } = await import('./tauri')
 
 beforeEach(() => {
   invoke.mockReset()
   listeners.length = 0
   unlisten.mockReset()
+  closeListeners.length = 0
+  unlistenClose.mockReset()
 })
 
 describe('TauriFileAccess', () => {
@@ -134,9 +149,83 @@ describe('tauriPlatform', () => {
     expect(await platform.recents()).toEqual([])
   })
 
+  it('holds the window open for the closing work, then lets it go', async () => {
+    const platform = tauriPlatform()
+    let finished = false
+    const stop = platform.onCloseRequested!(async () => {
+      await Promise.resolve()
+      finished = true
+    })
+    expect(closeListeners).toHaveLength(1)
+    const preventDefault = vi.fn()
+    await closeListeners[0]({ preventDefault })
+    expect(finished).toBe(true)
+    // Not prevented: the window API destroys the window once this resolves.
+    expect(preventDefault).not.toHaveBeenCalled()
+
+    stop()
+    await Promise.resolve()
+    expect(unlistenClose).toHaveBeenCalled()
+  })
+
+  it('does not let a stuck or failing handler hold the window hostage', async () => {
+    vi.useFakeTimers()
+    try {
+      const platform = tauriPlatform()
+      platform.onCloseRequested!(() => new Promise(() => {}))
+      let released = false
+      void closeListeners[0]({ preventDefault: vi.fn() }).then(() => {
+        released = true
+      })
+      await vi.advanceTimersByTimeAsync(9000)
+      expect(released).toBe(false)
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(released).toBe(true)
+
+      platform.onCloseRequested!(async () => {
+        throw new Error('flush failed')
+      })
+      await expect(closeListeners[1]({ preventDefault: vi.fn() })).resolves.toBeUndefined()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('lets a vanished recent reject with the shell\'s reason', async () => {
     const platform = tauriPlatform()
     invoke.mockRejectedValueOnce('vault is no longer at C:\\stories\\vault — pick the folder again instead.')
     await expect(platform.openRecent('vault')).rejects.toThrow('pick the folder again')
+  })
+})
+
+describe('forwardErrorsToShell', () => {
+  it('sends uncaught errors and unhandled rejections to the shell log, until uninstalled', async () => {
+    invoke.mockResolvedValue(undefined)
+    // A page-shaped target of our own: an ErrorEvent on the real window
+    // is an uncaught exception as far as the test runner is concerned.
+    const page = new EventTarget() as unknown as Window
+    const uninstall = forwardErrorsToShell(page)
+
+    page.dispatchEvent(new ErrorEvent('error', { error: new Error('boom'), message: 'boom' }))
+    expect(invoke).toHaveBeenLastCalledWith('log_error', {
+      message: expect.stringMatching(/^Uncaught: Error: boom/),
+    })
+
+    const rejection = new Event('unhandledrejection')
+    Object.defineProperty(rejection, 'reason', { value: 'No file at scenes/gone.md' })
+    page.dispatchEvent(rejection)
+    expect(invoke).toHaveBeenLastCalledWith('log_error', {
+      message: 'Unhandled rejection: No file at scenes/gone.md',
+    })
+
+    // The shell refusing the report must not become another error.
+    invoke.mockRejectedValueOnce('Command log_error not found')
+    page.dispatchEvent(new ErrorEvent('error', { error: new Error('again'), message: 'again' }))
+    await Promise.resolve()
+
+    uninstall()
+    invoke.mockClear()
+    page.dispatchEvent(new ErrorEvent('error', { error: new Error('silent'), message: 'silent' }))
+    expect(invoke).not.toHaveBeenCalled()
   })
 })

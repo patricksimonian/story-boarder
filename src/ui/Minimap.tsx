@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { boardGeometry, columnAt, pixelOf } from '../board/geometry'
 import { laneIndexes, layoutBoard } from '../board/layout'
 import type { Story } from '../domain/types'
 import { Glyph } from './SceneBadges'
 
-/** Board column pitch (150px card + 10px gap) → minimap pitch 24px. */
-const BOARD_PITCH = 160
+/** Every board column, whatever its width there, is 24px here. */
 const MM_PITCH = 24
-const SCALE = MM_PITCH / BOARD_PITCH
 
 const laneTop = (lane: number) => 4 + lane * 14
 const short = (title: string) => title.split('—')[0].trim()
@@ -25,6 +24,7 @@ export function Minimap({
 }) {
   const { manifest, scenes } = story
   const layout = useMemo(() => layoutBoard(manifest, scenes), [manifest, scenes])
+  const geometry = useMemo(() => boardGeometry(layout), [layout])
   const trackRef = useRef<HTMLDivElement>(null)
   const rootRef = useRef<HTMLDivElement>(null)
   const [viewport, setViewport] = useState({ left: 0, width: 0 })
@@ -49,11 +49,11 @@ export function Minimap({
   useEffect(() => {
     const el = scroller.current
     if (!el) return
-    const update = () =>
-      setViewport({
-        left: el.scrollLeft * SCALE,
-        width: Math.min(el.clientWidth, el.scrollWidth) * SCALE,
-      })
+    const update = () => {
+      const from = columnAt(geometry, el.scrollLeft)
+      const to = columnAt(geometry, el.scrollLeft + Math.min(el.clientWidth, el.scrollWidth))
+      setViewport({ left: from * MM_PITCH, width: (to - from) * MM_PITCH })
+    }
     update()
     el.addEventListener('scroll', update, { passive: true })
     window.addEventListener('resize', update)
@@ -61,14 +61,14 @@ export function Minimap({
       el.removeEventListener('scroll', update)
       window.removeEventListener('resize', update)
     }
-  }, [scroller])
+  }, [scroller, geometry])
 
   const scrollToClientX = (clientX: number) => {
     const el = scroller.current
     const track = trackRef.current
     if (!el || !track) return
     const rect = track.getBoundingClientRect()
-    el.scrollTo({ left: (clientX - rect.left) / SCALE - el.clientWidth / 2 })
+    el.scrollTo({ left: pixelOf(geometry, (clientX - rect.left) / MM_PITCH) - el.clientWidth / 2 })
   }
 
   const width = layout.columnCount * MM_PITCH
@@ -95,7 +95,7 @@ export function Minimap({
               style={{ left: start * MM_PITCH, maxWidth: (end - start + 1) * MM_PITCH - 4 }}
               onClick={() =>
                 scroller.current?.scrollTo({
-                  left: Math.max(0, start * BOARD_PITCH - 34),
+                  left: Math.max(0, pixelOf(geometry, start) - 34),
                   behavior: 'smooth',
                 })
               }

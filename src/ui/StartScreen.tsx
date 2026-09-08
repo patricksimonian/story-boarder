@@ -23,7 +23,8 @@ export function StartScreen({
 }) {
   return (
     <main className="start">
-      <h1>Storyline App</h1>
+      <h1>Story Boarder</h1>
+      <span className="text-xs opacity-60">v{__APP_VERSION__}</span>
       <p className="start-sub">No story folder open.</p>
       <button className="start-open" onClick={onPick}>
         Open a story folder
