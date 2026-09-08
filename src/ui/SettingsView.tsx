@@ -37,7 +37,7 @@ export function SettingsView({
       {/* Each pane is keyed on what the files hold, so a save or an outside edit starts it over from the file. */}
       <StoryPane key={`${manifest.title}\n${JSON.stringify(manifest.settings)}`} manifest={manifest} onSave={onSaveStory} />
       <ClaudePane
-        key={`${assistant.enabled}\n${assistant.model}\n${prompts.readScene}\n${prompts.checkContinuity}`}
+        key={`${assistant.enabled}\n${assistant.model}\n${assistant.autoRead}\n${prompts.readScene}\n${prompts.checkContinuity}`}
         assistant={assistant}
         prompts={prompts}
         health={health}
@@ -94,11 +94,16 @@ function ClaudePane({
 }) {
   const [enabled, setEnabled] = useState(assistant.enabled)
   const [model, setModel] = useState(assistant.model)
+  const [autoRead, setAutoRead] = useState(assistant.autoRead)
   const [readScene, setReadScene] = useState(prompts.readScene)
   const [checkContinuity, setCheckContinuity] = useState(prompts.checkContinuity)
 
   const dirty =
-    enabled !== assistant.enabled || model !== assistant.model || readScene !== prompts.readScene || checkContinuity !== prompts.checkContinuity
+    enabled !== assistant.enabled ||
+    model !== assistant.model ||
+    autoRead !== assistant.autoRead ||
+    readScene !== prompts.readScene ||
+    checkContinuity !== prompts.checkContinuity
   const custom = !MODEL_CHOICES.some((c) => c.value === model)
 
   const statusWord = health.kind === 'checking' ? 'Checking Claude' : health.kind === 'passed' ? 'Passed' : health.kind === 'error' ? 'Error' : 'Off'
@@ -158,6 +163,11 @@ function ClaudePane({
             {custom && <option value="custom">{model} (from story.json)</option>}
           </select>
         </label>
+        <label className="settings-switch">
+          <input type="checkbox" role="switch" aria-label="Read automatically" checked={autoRead} disabled={!enabled} onChange={(e) => setAutoRead(e.target.checked)} />
+          Read automatically after a save
+          <span className="settings-hint">— otherwise only the Read buttons and the whole-story pass read anything</span>
+        </label>
         <PromptField label="Read prompt" name="readScene" value={readScene} fallback={DEFAULT_PROMPTS.readScene} disabled={!enabled} onChange={setReadScene} />
         <PromptField
           label="Continuity prompt"
@@ -170,7 +180,7 @@ function ClaudePane({
       </div>
       {dirty && (
         <div className="settings-savebar">
-          <button type="button" onClick={() => onSave({ enabled, model }, { readScene, checkContinuity })}>
+          <button type="button" onClick={() => onSave({ enabled, model, autoRead }, { readScene, checkContinuity })}>
             Save
           </button>
           <button
@@ -178,6 +188,7 @@ function ClaudePane({
             onClick={() => {
               setEnabled(assistant.enabled)
               setModel(assistant.model)
+              setAutoRead(assistant.autoRead)
               setReadScene(prompts.readScene)
               setCheckContinuity(prompts.checkContinuity)
             }}

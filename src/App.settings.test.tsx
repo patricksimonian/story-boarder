@@ -17,8 +17,8 @@ beforeEach(() => {
  * be pressed before anything lands.
  */
 
-async function openSettings(world: TestWorld, runner?: StubProcessRunner) {
-  render(<App platform={world.platform} runner={runner} autosaveDelayMs={20} />)
+async function openSettings(world: TestWorld, runner?: StubProcessRunner, readIdleMs = 4000) {
+  render(<App platform={world.platform} runner={runner} autosaveDelayMs={20} readIdleMs={readIdleMs} />)
   await userEvent.click(await screen.findByRole('button', { name: /open a story folder/i }))
   await screen.findByRole('heading', { name: 'Embers of the Vault' })
   await userEvent.click(screen.getByRole('button', { name: /⚙ settings/i }))
@@ -39,7 +39,7 @@ describe('the story pane', () => {
     expect((await manifestOf(world)).title).toBe('Embers of the Vault')
     await userEvent.click(within(view.getByLabelText('Story settings')).getByRole('button', { name: 'Save' }))
     await waitFor(async () => expect((await manifestOf(world)).title).toBe('Embers, Reborn'))
-    expect((await manifestOf(world)).settings).toEqual({ assistant: { enabled: true, model: 'haiku' } })
+    expect((await manifestOf(world)).settings).toEqual({ assistant: { enabled: true, model: 'haiku', autoRead: true } })
     expect(await screen.findByRole('heading', { name: 'Embers, Reborn' })).toBeInTheDocument()
   })
 
@@ -77,7 +77,7 @@ describe('the Claude pane', () => {
     await userEvent.clear(prompt)
     await userEvent.paste('Read it my way.')
     await userEvent.click(pane.getByRole('button', { name: 'Save' }))
-    await waitFor(async () => expect((await manifestOf(world)).settings.assistant).toEqual({ enabled: true, model: 'sonnet' }))
+    await waitFor(async () => expect((await manifestOf(world)).settings.assistant).toEqual({ enabled: true, model: 'sonnet', autoRead: false }))
     expect(await world.files.readText('coach/read-scene.md')).toBe('Read it my way.\n')
     expect(await world.files.exists('coach/check-continuity.md')).toBe(true)
     expect(pane.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument()
@@ -104,6 +104,31 @@ describe('the Claude pane', () => {
     runner.authValue = { kind: 'signed-in' }
     await userEvent.click(pane.getByRole('button', { name: 'Check again' }))
     expect(await pane.findByRole('status')).toHaveTextContent(/Passed/)
+  })
+
+  test('reading after a save is its own switch, off until asked for, and a save with it off leaves saves quiet', async () => {
+    const world = embersWorld()
+    await enableCoaching(world.files, 'haiku', false)
+    const runner = new StubProcessRunner()
+    const view = await openSettings(world, runner, 30)
+    const pane = within(view.getByLabelText('Claude Code settings'))
+    await pane.findByRole('status')
+    expect(pane.getByRole('switch', { name: 'Read automatically' })).not.toBeChecked()
+
+    await userEvent.click(screen.getByRole('button', { name: /storylines/i }))
+    await userEvent.click((await screen.findAllByRole('button', { name: 'Open scene Cold Open: Lowmarket' }))[0])
+    const editor = await screen.findByRole('dialog', { name: /scene editor/i })
+    expect(within(editor).getByRole('button', { name: 'Read' })).toBeEnabled()
+    await userEvent.type(within(editor).getByRole('textbox', { name: /synopsis/i }), ' More.')
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    expect(runner.calls.filter((c) => c.workflow === 'read-scene')).toHaveLength(0)
+
+    await userEvent.keyboard('{Escape}')
+    await userEvent.click(screen.getByRole('button', { name: /⚙ settings/i }))
+    const again = within(within(await screen.findByRole('region', { name: /^settings$/i })).getByLabelText('Claude Code settings'))
+    await userEvent.click(again.getByRole('switch', { name: 'Read automatically' }))
+    await userEvent.click(again.getByRole('button', { name: 'Save' }))
+    await waitFor(async () => expect((await manifestOf(world)).settings.assistant).toEqual({ enabled: true, model: 'haiku', autoRead: true }))
   })
 
   test('Cancel drops the pane’s edits, and a Reset puts a prompt back', async () => {

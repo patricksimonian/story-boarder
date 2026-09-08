@@ -9,7 +9,7 @@ A cog at the bottom left of the navigation says Settings. Settings holds the sto
 
 Coaching is a toggle. When it is switched on, and on every app start while it is on, a health check runs. Its status reads **Checking Claude**, **Passed**, or **Error**, and an error says tersely what is wrong: *claude code not installed*, *claude not configured*, *claude not logged in*. In a browser the same check goes through the helper, so the first thing it can say is *assistant helper not running*.
 
-A dropdown picks the model, defaulting to haiku; the choice is checked against what the subscription can actually run, because the health check's last step is a ping with that model.
+A dropdown picks the model, defaulting to haiku; the choice is checked against what the subscription can actually run, because the health check's last step is a ping with that model. A second switch, off by default because a read costs, makes a save followed by a read once typing rests; with it off, only the Read buttons and the whole-story pass read anything. It is `settings.assistant.autoRead`.
 
 The prompt templates the reads and checks use are fields the writer can edit. Any change in the Claude pane — the toggle, the model, a prompt — opens a Save and a Cancel below the pane; nothing lands until Save.
 

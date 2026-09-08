@@ -244,7 +244,7 @@ export default function App({
   // check behind the switch is what this machine says right now, run
   // when the switch goes on and at every open while it is on.
   const assistant: AssistantSettings = useMemo(
-    () => (loaded ? assistantSettings(loaded.story.manifest) : { enabled: false, model: 'haiku' }),
+    () => (loaded ? assistantSettings(loaded.story.manifest) : { enabled: false, model: 'haiku', autoRead: false }),
     [loaded],
   )
   const [health, setHealth] = useState<Health>({ kind: 'idle' })
@@ -751,9 +751,9 @@ export default function App({
     }
   }
 
-  /** A read follows a save once typing has rested; only the latest save's read survives. */
+  /** A read follows a save once typing has rested, when the story asks for that; only the latest save's read survives. */
   function scheduleRead(item: TargetKey): void {
-    if (!runner || !coachingOn) return
+    if (!runner || !coachingOn || !assistant.autoRead) return
     clearTimeout(readTimer.current)
     readTimer.current = window.setTimeout(() => void readItem(item), readIdleMs)
   }

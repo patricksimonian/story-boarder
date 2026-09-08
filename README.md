@@ -57,7 +57,7 @@ Release: publish a GitHub release and `.github/workflows/release.yml` builds and
 
 The coach runs through the Claude Code you have installed and signed into. Install Claude Code and sign in, then open Settings (the cog at the bottom of the navigation) and switch Coaching on. A health check runs there and on every open while it is on: Claude Code found, signed in, and answering through the model you pick. On the desktop, that is all. In a browser, run `pnpm assistant` at the project and leave it running first; the check says so if it is not. The prompts the reads and checks use are files under `coach/` in the story folder, editable in Settings or anywhere else.
 
-With it on, prose that names a character, place, lore page, note, scene, or variable lights up in every editor; hover a name for its page and where else it is named, or to rule on what a phrase means. A scene read follows each save (or the Read button) and records what the scene says about who is in it and what changes; the Coach view keeps that log, and a continuity check walks a storyline through it and reports what cannot all be true, in Analysis. The mention pipeline works without Claude Code; the reads and checks need it.
+With it on, prose that names a character, place, lore page, note, scene, or variable lights up in every editor; hover a name for its page and where else it is named, or to rule on what a phrase means. A scene read, from the Read button or after each save if you switch that on, records what the scene says about who is in it and what changes; the Coach view keeps that log, and a continuity check walks a storyline through it and reports what cannot all be true, in Analysis. The mention pipeline works without Claude Code; the reads and checks need it.
 
 ## To Dos
 

@@ -12,6 +12,8 @@ export interface AssistantSettings {
   enabled: boolean
   /** An alias Claude Code accepts after --model, or a full model name. */
   model: string
+  /** Whether a save is followed by a read once typing rests. Off by default: a read costs. */
+  autoRead: boolean
 }
 
 export const DEFAULT_MODEL = 'haiku'
@@ -29,11 +31,15 @@ export function assistantSettings(manifest: StoryManifest): AssistantSettings {
   return {
     enabled: raw?.enabled === true,
     model: typeof raw?.model === 'string' && raw.model.trim() !== '' ? raw.model.trim() : DEFAULT_MODEL,
+    autoRead: raw?.autoRead === true,
   }
 }
 
 export function withAssistant(manifest: StoryManifest, settings: AssistantSettings): StoryManifest {
-  return { ...manifest, settings: { ...manifest.settings, assistant: { enabled: settings.enabled, model: settings.model } } }
+  return {
+    ...manifest,
+    settings: { ...manifest.settings, assistant: { enabled: settings.enabled, model: settings.model, autoRead: settings.autoRead } },
+  }
 }
 
 export interface Prompts {

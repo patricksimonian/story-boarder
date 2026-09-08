@@ -9,11 +9,11 @@ const manifest = (settings: Record<string, unknown>): StoryManifest => ({ title:
 
 describe('assistant settings in story.json', () => {
   test('off with haiku unless the manifest says otherwise, and written back beside the other settings', () => {
-    expect(assistantSettings(manifest({}))).toEqual({ enabled: false, model: 'haiku' })
-    expect(assistantSettings(manifest({ assistant: { enabled: true, model: ' sonnet ' } }))).toEqual({ enabled: true, model: 'sonnet' })
-    expect(assistantSettings(manifest({ assistant: { enabled: 'yes', model: '' } }))).toEqual({ enabled: false, model: 'haiku' })
-    const next = withAssistant(manifest({ sync: { owner: 'p', repo: 'r' } }), { enabled: true, model: 'opus' })
-    expect(next.settings).toEqual({ sync: { owner: 'p', repo: 'r' }, assistant: { enabled: true, model: 'opus' } })
+    expect(assistantSettings(manifest({}))).toEqual({ enabled: false, model: 'haiku', autoRead: false })
+    expect(assistantSettings(manifest({ assistant: { enabled: true, model: ' sonnet ', autoRead: true } }))).toEqual({ enabled: true, model: 'sonnet', autoRead: true })
+    expect(assistantSettings(manifest({ assistant: { enabled: 'yes', model: '', autoRead: 'yes' } }))).toEqual({ enabled: false, model: 'haiku', autoRead: false })
+    const next = withAssistant(manifest({ sync: { owner: 'p', repo: 'r' } }), { enabled: true, model: 'opus', autoRead: true })
+    expect(next.settings).toEqual({ sync: { owner: 'p', repo: 'r' }, assistant: { enabled: true, model: 'opus', autoRead: true } })
   })
 })
 

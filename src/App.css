@@ -2745,3 +2745,8 @@ button.sb-pen:focus-visible {
   background: transparent;
   font: inherit;
 }
+.settings-hint {
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--muted);
+}
