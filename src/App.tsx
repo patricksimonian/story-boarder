@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 // App.css is pulled in by index.css, inside Tailwind's components layer.
 import type { OpenedFolder, Platform } from './adapters/types'
-import type { Note, Playthrough, ReferenceEntity, ReferenceKind, Scene, Slug, StoryManifest, VariableRegistry } from './domain/types'
+import type { Note, Playthrough, ReferenceEntity, ReferenceKind, Scene, Slug, StoryManifest, TargetKey, VariableRegistry } from './domain/types'
 import { analyse } from './engine/analyse'
 import { parseNoteFile, serializeNoteFile } from './files/noteFile'
 import { parseReferenceFile, serializeReferenceFile } from './files/referenceFile'
@@ -14,6 +14,10 @@ import { exportPlayable, type ExportResult } from './interchange/export'
 import { importToFiles } from './interchange/import'
 import { applySuggestion, type LiftSuggestion } from './interchange/lift'
 import runtimeJs from './player/runtime.generated.js?raw'
+import type { MentionContext } from './mentions/context'
+import { describeTarget } from './mentions/describe'
+import { dictionary, findMentions, mentionIndex } from './mentions/match'
+import { MENTIONS_PATH, parseTargetKey, serializeVerdicts, targetKey, withVerdict } from './mentions/verdicts'
 import { readSceneFromHash, readViewFromHash, viewToHash, type View } from './state/view'
 import { loadStory, type LoadedStory } from './story/loadStory'
 import { applyTemplate } from './story/templates'
@@ -203,6 +207,19 @@ export default function App({
   }
   const refSaveTimer = useRef<number | undefined>(undefined)
   const findings = useMemo(() => (loaded ? analyse(loaded.story) : []), [loaded])
+  // Everything the story names, and everywhere it is named: what the
+  // prose editors draw mentions from. Rebuilt when the story reloads.
+  const dict = useMemo(() => (loaded ? dictionary(loaded.story) : null), [loaded])
+  const index = useMemo(() => (loaded && dict ? mentionIndex(loaded.story, dict) : null), [loaded, dict])
+  const sceneItem = draft ? targetKey({ kind: 'scene', id: draft.scene.id }) : null
+  const noteItem = noteDraft ? targetKey({ kind: 'note', id: noteDraft.note.id }) : null
+  const refItem = refDraft ? targetKey(refDraft.entity) : null
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- mentionsFor reads only dict, index, and the loaded story
+  const sceneMentions = useMemo(() => (sceneItem ? mentionsFor(sceneItem) : undefined), [sceneItem, dict, index])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const noteMentions = useMemo(() => (noteItem ? mentionsFor(noteItem) : undefined), [noteItem, dict, index])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const refMentions = useMemo(() => (refItem ? mentionsFor(refItem) : undefined), [refItem, dict, index])
   const git = useMemo(() => (folder ? folderGit(folder.files) : null), [folder])
   /** Conflicts found at launch, shown one at a time. */
   const queuedConflicts = useRef<JournalConflict[]>([])
@@ -578,6 +595,49 @@ export default function App({
     await folder.files.writeText(current.path, text)
     await folder.journal.clear(current.path)
     replaceDraft(current, text)
+    await reload(folder)
+  }
+
+  /**
+   * What a prose editor needs to draw mentions for one item and answer
+   * for them: the finder over the story's names with this item's own
+   * verdicts, the card behind each name, and the two things the tooltip
+   * can do — go there, or rule on the phrase.
+   */
+  function mentionsFor(item: TargetKey): MentionContext | undefined {
+    if (!loaded || !dict || !index) return undefined
+    const { story } = loaded
+    const verdicts = story.verdicts[item] ?? []
+    return {
+      find: (text) => findMentions(text, dict, { self: item, verdicts }),
+      describe: (key) => describeTarget(story, key, item, index),
+      onOpen: (key) => void openTarget(key),
+      onVerdict: (quote, entity) => void ruleOnMention(item, quote, entity),
+    }
+  }
+
+  /** Goes to the thing a mention names: a scene in the editor, a page in its view. */
+  async function openTarget(key: TargetKey): Promise<void> {
+    const parsed = parseTargetKey(key)
+    if (!parsed) return
+    if (parsed.kind === 'scene') return openScene(parsed.id)
+    if (draftRef.current) closeScene()
+    if (parsed.kind === 'note') {
+      setView({ level: 'notes' })
+      await selectNote(parsed.id)
+    } else if (parsed.kind === 'variable') {
+      setView({ level: 'variables' })
+    } else {
+      setView({ level: 'library' })
+      await selectReference(parsed.kind as ReferenceKind, parsed.id)
+    }
+  }
+
+  /** The writer's ruling on a phrase lands in mentions.json; the editors redraw from the reload. */
+  async function ruleOnMention(item: TargetKey, quote: string, entity: TargetKey | null): Promise<void> {
+    if (!folder || !loaded) return
+    const next = withVerdict(loaded.story.verdicts, item, { quote, entity, by: 'writer' })
+    await folder.files.writeText(MENTIONS_PATH, serializeVerdicts(next))
     await reload(folder)
   }
 
@@ -1235,6 +1295,7 @@ export default function App({
             onCreateSection={(path) => void createSectionAction(path)}
             onEdit={editNote}
             onDelete={() => void deleteNoteAction()}
+            mentions={noteMentions}
           />
         )}
         {view.level === 'stats' && (
@@ -1268,6 +1329,7 @@ export default function App({
             onEdit={editReference}
             onAddImages={(picked) => void addImagesToReference(picked)}
             onDelete={() => void deleteReferenceAction()}
+            mentions={refMentions}
           />
         )}
         {view.level === 'sync' && (
@@ -1304,6 +1366,7 @@ export default function App({
           git={git}
           onRestore={(text) => void restoreSceneVersion(text)}
           onAddImages={(picked) => void addImagesToScene(picked)}
+          mentions={sceneMentions}
         />
       )}
       {rawEdit && (

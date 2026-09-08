@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Note, Slug, Story } from '../domain/types'
+import type { MentionContext } from '../mentions/context'
 import { ProseEditor } from './ProseEditor'
 
 /**
@@ -19,6 +20,7 @@ export function NotesView({
   onCreateSection,
   onEdit,
   onDelete,
+  mentions,
 }: {
   story: Story
   /** The open note as the draft holds it, or null when none is open. */
@@ -28,6 +30,7 @@ export function NotesView({
   onCreateSection: (path: string) => void
   onEdit: (note: Note) => void
   onDelete: () => void
+  mentions?: MentionContext
 }) {
   const [picked, setPicked] = useState<string | null>(null)
   const [naming, setNaming] = useState<'note' | 'section' | null>(null)
@@ -179,6 +182,7 @@ export function NotesView({
               key={selected.id}
               markdown={selected.body}
               onChange={(body) => onEdit({ ...selected, body })}
+              mentions={mentions}
             />
             <div className="ed-section danger-zone">
               {!confirmingDelete ? (

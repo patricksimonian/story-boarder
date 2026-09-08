@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { FileAccess, GitClient, GitCommit } from '../adapters/types'
 import type { Scene, Slug, Story } from '../domain/types'
 import { insertBeat, moveBeat, removeBeat, setBeat } from '../editor/beats'
+import type { MentionContext } from '../mentions/context'
 import type { Placement } from '../story/mutations'
 import { EngineEditor } from './EngineEditor'
 import { MoodBoard } from './MoodBoard'
@@ -27,6 +28,7 @@ export function SceneEditor({
   git,
   onRestore,
   onAddImages,
+  mentions,
 }: {
   story: Story
   scene: Scene
@@ -43,6 +45,8 @@ export function SceneEditor({
   onRestore: (text: string) => void
   /** Stores the picked files under assets/ and pins them to this scene. */
   onAddImages: (picked: File[]) => void
+  /** What the prose names, and what to do about it; absent before a story is loaded. */
+  mentions?: MentionContext
 }) {
   const { manifest } = story
   const act = manifest.acts.find((a) => a.id === scene.act)
@@ -236,6 +240,7 @@ export function SceneEditor({
               key={`${scene.id}:${revision}`}
               markdown={scene.prose}
               onChange={(prose) => onChange({ ...scene, prose })}
+              mentions={mentions}
             />
           </div>
           <MoodBoard

@@ -2353,3 +2353,87 @@ button.sb-pen:focus-visible {
   cursor: pointer;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
 }
+
+/* ---------- mentions drawn over prose ---------- */
+.prose-wrap {
+  position: relative;
+}
+.mention {
+  text-decoration: underline;
+  text-decoration-color: #b39a5a;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.mention-probable {
+  text-decoration-style: dotted;
+  text-decoration-color: #b0a693;
+}
+.mention-model {
+  text-decoration-thickness: 1px;
+  text-decoration-color: #b0a693;
+}
+.mention-tip {
+  position: absolute;
+  z-index: 40;
+  min-width: 220px;
+  max-width: 340px;
+  padding: 10px 12px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(38, 34, 28, 0.14);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+.mention-ask {
+  margin: 0 0 8px;
+  font-style: italic;
+  color: var(--muted);
+}
+.mention-card + .mention-card {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.mention-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.mention-kind {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.mention-head .goto {
+  font-weight: 600;
+}
+.mention-line {
+  margin: 6px 0 0;
+}
+.mention-others {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.mention-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.mention-actions button {
+  font-size: 12px;
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--shade);
+  cursor: pointer;
+}
+.mention-actions button:hover {
+  background: var(--paper);
+}

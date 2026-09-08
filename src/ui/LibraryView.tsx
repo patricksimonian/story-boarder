@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { FileAccess } from '../adapters/types'
 import type { ReferenceEntity, ReferenceKind, Slug, Story } from '../domain/types'
+import type { MentionContext } from '../mentions/context'
 import { MoodBoard } from './MoodBoard'
 import { ProseEditor } from './ProseEditor'
 
@@ -21,6 +22,32 @@ function TagsField({ entity, onEdit }: { entity: ReferenceEntity; onEdit: (entit
             tags: e.target.value
               .split(',')
               .map((t) => t.trim())
+              .filter(Boolean),
+          })
+        }}
+      />
+    </label>
+  )
+}
+
+/** Other names the prose uses for this thing — "the smith", "Rook of Tanner's Row" — the same field shape as tags. */
+function AliasesField({ entity, onEdit }: { entity: ReferenceEntity; onEdit: (entity: ReferenceEntity) => void }) {
+  const [text, setText] = useState(entity.aliases.join(', '))
+  return (
+    <label className="notes-sectrow">
+      Also called
+      <input
+        aria-label="Aliases"
+        placeholder="the smith, the old man"
+        title="Other names the prose uses for this; each one lights up as a mention"
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value)
+          onEdit({
+            ...entity,
+            aliases: e.target.value
+              .split(',')
+              .map((a) => a.trim())
               .filter(Boolean),
           })
         }}
@@ -50,6 +77,7 @@ export function LibraryView({
   onEdit,
   onAddImages,
   onDelete,
+  mentions,
 }: {
   story: Story
   files: FileAccess
@@ -61,6 +89,7 @@ export function LibraryView({
   /** Stores the picked files under assets/ and pins them to the open page. */
   onAddImages: (picked: File[]) => void
   onDelete: () => void
+  mentions?: MentionContext
 }) {
   const [picked, setPicked] = useState<ReferenceKind>('character')
   const [naming, setNaming] = useState(false)
@@ -155,10 +184,12 @@ export function LibraryView({
               onChange={(e) => onEdit({ ...selected, title: e.target.value })}
             />
             <TagsField key={`tags-${selected.kind}/${selected.id}`} entity={selected} onEdit={onEdit} />
+            <AliasesField key={`aliases-${selected.kind}/${selected.id}`} entity={selected} onEdit={onEdit} />
             <ProseEditor
               key={`${selected.kind}/${selected.id}`}
               markdown={selected.body}
               onChange={(body) => onEdit({ ...selected, body })}
+              mentions={mentions}
             />
             <MoodBoard
               images={selected.images}

@@ -2,12 +2,14 @@ import type { Editor } from '@tiptap/core'
 import { Placeholder } from '@tiptap/extensions'
 import { Markdown } from '@tiptap/markdown'
 import StarterKit from '@tiptap/starter-kit'
+import { MentionHighlights } from './mentions'
 
 /**
  * The prose editor's extension set. Prose lives in the file as Markdown
  * under `## Prose`, so the editor speaks Markdown both ways. Headings
  * stop at level 3: a `## ` line would open a new file section, and a
- * `# ` line is the scene title's.
+ * `# ` line is the scene title's. Mentions are drawn over the text by
+ * the last extension and never enter it.
  */
 export function proseExtensions() {
   return [
@@ -18,6 +20,7 @@ export function proseExtensions() {
     }),
     Markdown,
     Placeholder.configure({ placeholder: 'Prose lives here — dialogue included. Nothing yet.' }),
+    MentionHighlights,
   ]
 }
 
