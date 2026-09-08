@@ -156,11 +156,12 @@ describe('the scene read', () => {
     await userEvent.click(screen.getByRole('button', { name: /📇 library/i }))
     const library = within(await screen.findByRole('region', { name: /^library$/i }))
     await userEvent.click(library.getByRole('button', { name: 'Open character Mara' }))
-    const chips = await library.findByLabelText('Proposed aliases')
-    expect(chips).toHaveTextContent('The door-woman')
-    await userEvent.click(within(chips).getByRole('button', { name: 'Add alias The door-woman' }))
+    const aliases = await library.findByRole('group', { name: /^aliases$/i })
+    expect(aliases).toHaveTextContent('The door-woman')
+    await userEvent.click(within(aliases).getByRole('button', { name: 'Add alias The door-woman' }))
     await waitFor(async () => expect(await world.files.readText('characters/mara.md')).toContain('aliases: [The door-woman]'))
-    expect(library.queryByLabelText('Proposed aliases')).not.toBeInTheDocument()
+    expect(within(aliases).queryByRole('button', { name: 'Add alias The door-woman' })).not.toBeInTheDocument()
+    expect(within(aliases).getByRole('button', { name: 'Remove alias The door-woman' })).toBeInTheDocument()
   })
 
   test("the writer's ruling outranks the read's", async () => {

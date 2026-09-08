@@ -50,7 +50,7 @@ describe('the reference library', () => {
 
     await userEvent.click(within(view).getByRole('button', { name: 'Open place The Vault' }))
     expect(within(view).getByRole('textbox', { name: /^title$/i })).toHaveValue('The Vault')
-    expect(within(view).getByRole('textbox', { name: /^tags$/i })).toHaveValue('underhive')
+    expect(within(view).getByRole('group', { name: /^tags$/i })).toHaveTextContent('underhive')
   })
 
   test('a new entity lands on the picked shelf and opens', async () => {
@@ -78,7 +78,7 @@ describe('the reference library', () => {
 
     await userEvent.click(within(view).getByRole('button', { name: 'Open character Mara' }))
     await userEvent.type(within(view).getByRole('textbox', { name: /^title$/i }), ' the Door-Woman')
-    await userEvent.type(within(view).getByRole('textbox', { name: /^tags$/i }), 'crew, safecracker')
+    await userEvent.type(within(view).getByRole('textbox', { name: /^tags$/i }), 'crew, safecracker{enter}')
 
     await waitFor(async () => {
       const text = await world.files.readText('characters/mara.md')

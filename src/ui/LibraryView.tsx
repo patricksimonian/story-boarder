@@ -4,101 +4,9 @@ import type { ReferenceEntity, ReferenceKind, Slug, Story, TargetKey } from '../
 import type { MentionContext } from '../mentions/context'
 import type { Target } from '../mentions/match'
 import { NamedIn } from './NamedIn'
+import { ChipsField } from './ChipsField'
 import { MoodBoard } from './MoodBoard'
 import { ProseEditor } from './ProseEditor'
-
-/** Tags are one comma-separated field, held as local text so a comma being typed isn't normalized away. */
-function TagsField({ entity, onEdit }: { entity: ReferenceEntity; onEdit: (entity: ReferenceEntity) => void }) {
-  const [text, setText] = useState(entity.tags.join(', '))
-  return (
-    <label className="notes-sectrow">
-      Tags
-      <input
-        aria-label="Tags"
-        placeholder="comma, separated"
-        value={text}
-        onChange={(e) => {
-          setText(e.target.value)
-          onEdit({
-            ...entity,
-            tags: e.target.value
-              .split(',')
-              .map((t) => t.trim())
-              .filter(Boolean),
-          })
-        }}
-      />
-    </label>
-  )
-}
-
-/**
- * Other names the prose uses for this thing — "the smith", "Rook of
- * Tanner's Row" — the same field shape as tags. Proposals from the scene
- * read sit after it as ghost chips: a tick adds one through the same
- * edit typing would make, a cross drops it.
- */
-function AliasesField({
-  entity,
-  onEdit,
-  proposals,
-  onAccept,
-  onDismiss,
-}: {
-  entity: ReferenceEntity
-  onEdit: (entity: ReferenceEntity) => void
-  proposals: string[]
-  onAccept: (alias: string) => void
-  onDismiss: (alias: string) => void
-}) {
-  const [text, setText] = useState(entity.aliases.join(', '))
-  return (
-    <div className="notes-sectrow notes-aliases">
-      <label>
-        Also called
-        <input
-          aria-label="Aliases"
-          placeholder="the smith, the old man"
-          className="ml-2"
-          title="Other names the prose uses for this; each one lights up as a mention"
-          value={text}
-          onChange={(e) => {
-            setText(e.target.value)
-            onEdit({
-              ...entity,
-              aliases: e.target.value
-                .split(',')
-                .map((a) => a.trim())
-                .filter(Boolean),
-            })
-          }}
-        />
-      </label>
-      {proposals.length > 0 && (
-        <span className="ghost-chips" aria-label="Proposed aliases">
-          {proposals.map((alias) => (
-            <span key={alias} className="ghost-chip" title="The scene read found this phrase naming this page in more than one place">
-              {alias}
-              <button
-                type="button"
-                aria-label={`Add alias ${alias}`}
-                onClick={() => {
-                  setText([...entity.aliases, alias].join(', '))
-                  onAccept(alias)
-                }}
-              >
-                ✓
-              </button>
-              <button type="button" aria-label={`Dismiss alias ${alias}`} onClick={() => onDismiss(alias)}>
-                ×
-              </button>
-            </span>
-          ))}
-        </span>
-      )}
-    </div>
-  )
-}
 
 const KINDS: { kind: ReferenceKind; label: string; one: string }[] = [
   { kind: 'character', label: 'Characters', one: 'character' },
@@ -126,7 +34,11 @@ export function LibraryView({
   onOpenTarget = () => { },
   aliasProposals = [],
   onAcceptAlias = () => { },
-  onDismissAlias = () => { },
+  onDismissAlias = () => {},
+  canRead = false,
+  reading = false,
+  readProblem = null,
+  onRead,
 }: {
   story: Story
   files: FileAccess
@@ -146,6 +58,11 @@ export function LibraryView({
   aliasProposals?: string[]
   onAcceptAlias?: (alias: string) => void
   onDismissAlias?: (alias: string) => void
+  canRead?: boolean
+  reading?: boolean
+  readProblem?: string | null
+  /** Sends this page to the read now: what its text names, and what it says. */
+  onRead?: () => void
 }) {
   const [picked, setPicked] = useState<ReferenceKind>('character')
   const [naming, setNaming] = useState(false)
@@ -239,15 +156,46 @@ export function LibraryView({
               value={selected.title}
               onChange={(e) => onEdit({ ...selected, title: e.target.value })}
             />
-            <TagsField key={`tags-${selected.kind}/${selected.id}`} entity={selected} onEdit={onEdit} />
-            <AliasesField
+            <ChipsField
+              key={`tags-${selected.kind}/${selected.id}`}
+              label="Tags"
+              name="Tags"
+              noun="tag"
+              values={selected.tags}
+              onChange={(tags) => onEdit({ ...selected, tags })}
+              placeholder="type one, press Enter"
+            />
+            <ChipsField
               key={`aliases-${selected.kind}/${selected.id}`}
-              entity={selected}
-              onEdit={onEdit}
+              label="Also called"
+              name="Aliases"
+              noun="alias"
+              values={selected.aliases}
+              onChange={(aliases) => onEdit({ ...selected, aliases })}
+              placeholder="the smith, the old man"
+              title="Other names the prose uses for this; each one lights up as a mention"
               proposals={aliasProposals}
               onAccept={onAcceptAlias}
               onDismiss={onDismissAlias}
+              proposalHint="The scene read found this phrase naming this page in more than one place"
             />
+            {onRead && (
+              <div className="notes-readrow">
+                <button
+                  type="button"
+                  disabled={!canRead || reading}
+                  title="Sends this page to Claude through your own Claude Code and records what its text names and says"
+                  onClick={onRead}
+                >
+                  {reading ? 'Reading…' : 'Read'}
+                </button>
+                {readProblem && (
+                  <span className="ed-readnote" role="alert">
+                    {readProblem}
+                  </span>
+                )}
+              </div>
+            )}
             <ProseEditor
               key={`${selected.kind}/${selected.id}`}
               markdown={selected.body}

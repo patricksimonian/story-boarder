@@ -109,7 +109,8 @@ export interface DevelopmentSite {
 /**
  * Every item in story order: each storyline's scenes in lane order (a
  * scene in two lanes counts where it first appears), then the loose
- * scenes, then the notes — the order the ledger is read back in.
+ * scenes, then the notes, then the library's pages — the order the
+ * ledger is read back in, and the order a whole-story read goes.
  */
 export function storyOrder(story: Story): Target[] {
   const seen = new Set<string>()
@@ -131,6 +132,9 @@ export function storyOrder(story: Story): Target[] {
   }
   for (const note of [...story.notes.values()].sort((a, b) => a.title.localeCompare(b.title))) {
     push({ kind: 'note', id: note.id, title: note.title })
+  }
+  for (const entity of [...story.references.values()].sort((a, b) => a.kind.localeCompare(b.kind) || a.title.localeCompare(b.title))) {
+    push({ kind: entity.kind, id: entity.id, title: entity.title })
   }
   return order
 }

@@ -49,7 +49,7 @@ describe('the ledger', () => {
     expect(modelVerdicts(undefined)).toEqual([])
   })
 
-  test('story order is lane order, a shared scene where it first appears, then loose scenes, then notes', async () => {
+  test('story order is lane order, a shared scene where it first appears, then loose scenes, then notes, then the library', async () => {
     const order = storyOrder(await story()).map((t) => `${t.kind}:${t.id}`)
     expect(order).toEqual([
       'scene:cold-open',
@@ -59,6 +59,8 @@ describe('the ledger', () => {
       'scene:pamphlets',
       'scene:rooftop-duel',
       'note:plan',
+      'character:mara',
+      'character:rook',
     ])
   })
 

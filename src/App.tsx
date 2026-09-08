@@ -944,6 +944,7 @@ export default function App({
     }
     await folder.journal.clear(path)
     await reload(folder)
+    scheduleRead(targetKey(current.entity))
   }
 
   async function createReferenceAction(kind: ReferenceKind, title: string): Promise<void> {
@@ -1595,6 +1596,12 @@ export default function App({
             onDismissAlias={(alias) => {
               const current = refDraftRef.current
               if (current) setDismissedAliases((set) => new Set(set).add(`${targetKey(current.entity)}|${phraseKey(alias)}`))
+            }}
+            canRead={coachingOn}
+            reading={refItem !== null && reading.has(refItem)}
+            readProblem={readProblem}
+            onRead={() => {
+              if (refItem) void readItem(refItem, { force: true })
             }}
           />
         )}

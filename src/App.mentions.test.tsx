@@ -121,7 +121,7 @@ describe('mentions in the app', () => {
     await userEvent.click(screen.getByRole('button', { name: /📇 library/i }))
     const library = await screen.findByRole('region', { name: /^library$/i })
     await userEvent.click(within(library).getByRole('button', { name: 'Open character Mara' }))
-    await userEvent.type(within(library).getByRole('textbox', { name: /^aliases$/i }), 'the door-woman')
+    await userEvent.type(within(library).getByRole('textbox', { name: /^aliases$/i }), 'the door-woman{enter}')
     await waitFor(async () => expect(await world.files.readText('characters/mara.md')).toContain('aliases: [the door-woman]'))
 
     await userEvent.keyboard('{Escape}')

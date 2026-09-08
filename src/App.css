@@ -2691,3 +2691,57 @@ button.sb-pen:focus-visible {
   max-width: 100%;
   object-fit: contain;
 }
+
+/* ---------- pills: tags and aliases ---------- */
+.chips-row {
+  align-items: flex-start;
+}
+.chips-label {
+  padding-top: 5px;
+  min-width: 72px;
+}
+.chips-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-height: 30px;
+  padding: 3px 6px;
+  border: 1px solid #d8d4cc;
+  border-radius: 6px;
+  background: var(--card);
+}
+.chips-field:focus-within {
+  outline: 2px solid #cdbd8f;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 9px;
+  border-radius: 12px;
+  font-size: 12px;
+  background: var(--shade);
+  border: 1px solid var(--line);
+}
+.chip button {
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--muted);
+}
+.chip button:hover {
+  color: var(--ink);
+}
+.chips-input {
+  flex: 1;
+  min-width: 120px;
+  padding: 3px 4px !important;
+  border: 0 !important;
+  outline: none;
+  background: transparent;
+  font: inherit;
+}
