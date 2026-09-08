@@ -2563,10 +2563,6 @@ button.sb-pen:focus-visible {
   font: inherit;
   line-height: 1.45;
 }
-.settings-json {
-  font-family: ui-monospace, Consolas, monospace;
-  font-size: 12.5px;
-}
 .settings-prompt {
   font-size: 13px;
 }

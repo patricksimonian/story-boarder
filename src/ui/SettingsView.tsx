@@ -4,8 +4,7 @@ import { DEFAULT_PROMPTS, MODEL_CHOICES, type AssistantSettings, type Prompts } 
 import type { StoryManifest, StorySettings } from '../domain/types'
 
 /**
- * Settings: the story's own, everything in story.json with the title
- * first; and Claude Code, a switch with a health check behind it, the
+ * Settings: the story's own, which is the title; and Claude Code, a switch with a health check behind it, the
  * model, and the prompts the reads and checks use. Each pane holds its
  * edits until its own Save; Cancel puts back what the files hold.
  */
@@ -33,7 +32,7 @@ export function SettingsView({
     <section className="hist-wrap" role="region" aria-label="Settings">
       <div className="view-bar">
         <h2>Settings</h2>
-        <span className="view-sub">the story's own, then Claude Code — nothing lands until you save a pane</span>
+        <span className="view-sub">the story's title, then Claude Code — nothing lands until you save a pane</span>
       </div>
       {/* Each pane is keyed on what the files hold, so a save or an outside edit starts it over from the file. */}
       <StoryPane key={`${manifest.title}\n${JSON.stringify(manifest.settings)}`} manifest={manifest} onSave={onSaveStory} />
@@ -50,21 +49,10 @@ export function SettingsView({
   )
 }
 
+/** The story's own settings that a writer sets by hand: the title. The rest of story.json is the app's to keep. */
 function StoryPane({ manifest, onSave }: { manifest: StoryManifest; onSave: (title: string, settings: StorySettings) => void }) {
-  const held = JSON.stringify(manifest.settings, null, 2)
   const [title, setTitle] = useState(manifest.title)
-  const [json, setJson] = useState(held)
-
-  let parsed: StorySettings | null = null
-  let problem: string | null = null
-  try {
-    const value: unknown = JSON.parse(json)
-    if (value && typeof value === 'object' && !Array.isArray(value)) parsed = value as StorySettings
-    else problem = 'Settings must be a JSON object.'
-  } catch (error) {
-    problem = `Not valid JSON: ${(error as Error).message}`
-  }
-  const dirty = title !== manifest.title || json !== held
+  const dirty = title !== manifest.title
 
   return (
     <div className="settings-pane" aria-label="Story settings">
@@ -74,28 +62,13 @@ function StoryPane({ manifest, onSave }: { manifest: StoryManifest; onSave: (tit
           Title
           <input aria-label="Story title" value={title} onChange={(e) => setTitle(e.target.value)} />
         </label>
-        <label>
-          Everything else in story.json settings
-          <textarea aria-label="Settings JSON" className="settings-json" rows={10} value={json} onChange={(e) => setJson(e.target.value)} spellCheck={false} />
-        </label>
-        {problem && (
-          <p className="settings-problem" role="alert">
-            {problem}
-          </p>
-        )}
       </div>
       {dirty && (
         <div className="settings-savebar">
-          <button type="button" disabled={parsed === null || title.trim() === ''} onClick={() => parsed && onSave(title.trim(), parsed)}>
+          <button type="button" disabled={title.trim() === ''} onClick={() => onSave(title.trim(), manifest.settings)}>
             Save
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              setTitle(manifest.title)
-              setJson(held)
-            }}
-          >
+          <button type="button" onClick={() => setTitle(manifest.title)}>
             Cancel
           </button>
         </div>

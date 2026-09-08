@@ -28,33 +28,30 @@ async function openSettings(world: TestWorld, runner?: StubProcessRunner) {
 const manifestOf = async (world: TestWorld) => JSON.parse(await world.files.readText('story.json')) as { title: string; settings: Record<string, unknown> }
 
 describe('the story pane', () => {
-  test('the title and the settings JSON save to story.json, and only on Save', async () => {
+  test('the title saves to story.json on Save, the rest of the file untouched; nothing else in it is offered for editing', async () => {
     const world = embersWorld()
+    await enableCoaching(world.files)
     const view = await openSettings(world, new StubProcessRunner())
+    expect(view.queryByRole('textbox', { name: /json/i })).not.toBeInTheDocument()
     const title = view.getByRole('textbox', { name: 'Story title' })
     await userEvent.clear(title)
     await userEvent.type(title, 'Embers, Reborn')
     expect((await manifestOf(world)).title).toBe('Embers of the Vault')
-    const json = view.getByRole('textbox', { name: 'Settings JSON' })
-    await userEvent.clear(json)
-    await userEvent.paste('{"goals": {"storyWords": 5000}}')
-    await userEvent.click(view.getByRole('button', { name: 'Save' }))
+    await userEvent.click(within(view.getByLabelText('Story settings')).getByRole('button', { name: 'Save' }))
     await waitFor(async () => expect((await manifestOf(world)).title).toBe('Embers, Reborn'))
-    expect((await manifestOf(world)).settings).toEqual({ goals: { storyWords: 5000 } })
+    expect((await manifestOf(world)).settings).toEqual({ assistant: { enabled: true, model: 'haiku' } })
     expect(await screen.findByRole('heading', { name: 'Embers, Reborn' })).toBeInTheDocument()
   })
 
-  test('invalid JSON cannot be saved, and Cancel puts the file back', async () => {
+  test('an empty title cannot be saved, and Cancel puts the title back', async () => {
     const world = embersWorld()
     const view = await openSettings(world, new StubProcessRunner())
-    const json = view.getByRole('textbox', { name: 'Settings JSON' })
-    await userEvent.clear(json)
-    await userEvent.paste('{ not json')
-    expect(view.getByRole('alert')).toHaveTextContent(/not valid JSON/i)
-    expect(view.getByRole('button', { name: 'Save' })).toBeDisabled()
-    await userEvent.click(view.getByRole('button', { name: 'Cancel' }))
-    expect(view.getByRole('textbox', { name: 'Settings JSON' })).toHaveValue('{}')
-    expect(view.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument()
+    const pane = within(view.getByLabelText('Story settings'))
+    await userEvent.clear(pane.getByRole('textbox', { name: 'Story title' }))
+    expect(pane.getByRole('button', { name: 'Save' })).toBeDisabled()
+    await userEvent.click(pane.getByRole('button', { name: 'Cancel' }))
+    expect(pane.getByRole('textbox', { name: 'Story title' })).toHaveValue('Embers of the Vault')
+    expect(pane.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument()
   })
 })
 

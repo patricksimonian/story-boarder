@@ -5,7 +5,7 @@ Status: specified 2026-09-08 from Patrick's UX, in his words, after 17 landed wi
 
 ## The user story
 
-A cog at the bottom left of the navigation says Settings. Settings holds the story's own settings — everything in `story.json`, the title included — and, in its own pane, Claude Code.
+A cog at the bottom left of the navigation says Settings. Settings holds the story's own settings — the title — and, in its own pane, Claude Code. The rest of `story.json` is the app's to keep: on Patrick's correction the same day, no pane edits it by hand.
 
 Coaching is a toggle. When it is switched on, and on every app start while it is on, a health check runs. Its status reads **Checking Claude**, **Passed**, or **Error**, and an error says tersely what is wrong: *claude code not installed*, *claude not configured*, *claude not logged in*. In a browser the same check goes through the helper, so the first thing it can say is *assistant helper not running*.
 
@@ -29,4 +29,4 @@ The Coach view's Model section and its Test button go to Settings. The Coach vie
 
 ## Tests
 
-The Settings view: the cog opens it; the title and the settings JSON save to story.json, invalid JSON cannot be saved; switching coaching on shows Checking then Passed with a stub, and each of the terse errors with the matching stub state; the model dropdown defaults to haiku and saves; a prompt edit saves to its file and Cancel reverts it; a story that opens with coaching on runs the check at once; with coaching off the Read button is disabled. The health check itself is a table test over a stub runner.
+The Settings view: the cog opens it; the title saves to story.json and nothing else in the file is offered; switching coaching on shows Checking then Passed with a stub, and each of the terse errors with the matching stub state; the model dropdown defaults to haiku and saves; a prompt edit saves to its file and Cancel reverts it; a story that opens with coaching on runs the check at once; with coaching off the Read button is disabled. The health check itself is a table test over a stub runner.
