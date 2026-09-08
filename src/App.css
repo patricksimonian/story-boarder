@@ -2612,3 +2612,82 @@ button.sb-pen:focus-visible {
   font-size: 13px;
   color: var(--muted);
 }
+.mention-tip.expanded {
+  max-width: 520px;
+  max-height: 60vh;
+  overflow: auto;
+}
+.mention-link {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.mention-expand {
+  margin-left: auto;
+  font-size: 11px;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--shade);
+  cursor: pointer;
+}
+.mention-page {
+  margin-top: 6px;
+}
+.mention-empty {
+  color: var(--muted);
+  font-style: italic;
+}
+.mention-section h5 {
+  margin: 10px 0 4px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.mention-list {
+  margin: 0;
+  padding-left: 16px;
+}
+.mention-list li {
+  margin: 2px 0;
+}
+.named-in-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.named-in-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin: 3px 0;
+}
+.named-in-kind {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  min-width: 80px;
+}
+.mention-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 2px;
+}
+.mention-image {
+  height: 64px;
+  width: auto;
+  max-width: 120px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--shade);
+}
+.mention-image.large {
+  height: auto;
+  max-height: 220px;
+  max-width: 100%;
+  object-fit: contain;
+}

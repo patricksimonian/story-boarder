@@ -62,3 +62,4 @@ With it on, prose that names a character, place, lore page, note, scene, or vari
 ## To Dos
 
 - on the dynamic coaching, variable prediction/settings/guidance within a scene (the model coach of issue 11); continuity checking and the development log landed with the mention pipeline.
+- missing references IE naming characters that aren't defined

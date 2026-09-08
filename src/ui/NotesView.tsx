@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import type { Note, Slug, Story } from '../domain/types'
+import type { Note, Slug, Story, TargetKey } from '../domain/types'
 import type { MentionContext } from '../mentions/context'
+import type { Target } from '../mentions/match'
+import { NamedIn } from './NamedIn'
 import { ProseEditor } from './ProseEditor'
 
 /**
@@ -21,6 +23,8 @@ export function NotesView({
   onEdit,
   onDelete,
   mentions,
+  namedIn = [],
+  onOpenTarget = () => {},
   canRead = false,
   reading = false,
   readProblem = null,
@@ -35,6 +39,8 @@ export function NotesView({
   onEdit: (note: Note) => void
   onDelete: () => void
   mentions?: MentionContext
+  namedIn?: Target[]
+  onOpenTarget?: (key: TargetKey) => void
   canRead?: boolean
   reading?: boolean
   readProblem?: string | null
@@ -209,6 +215,7 @@ export function NotesView({
               onChange={(body) => onEdit({ ...selected, body })}
               mentions={mentions}
             />
+            <NamedIn items={namedIn} onOpen={onOpenTarget} />
             <div className="ed-section danger-zone">
               {!confirmingDelete ? (
                 <button type="button" className="danger-link" onClick={() => setConfirmingDelete(true)}>

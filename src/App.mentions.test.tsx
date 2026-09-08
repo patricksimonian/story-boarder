@@ -90,6 +90,30 @@ describe('mentions in the app', () => {
     await waitFor(() => expect(mentionsIn(editor).map((el) => el.textContent)).toEqual(['Maara']))
   })
 
+  test('the page knows where it is named, and the card can open the page in place', async () => {
+    const world = embersWorld()
+    await world.files.writeText('scenes/the-dry-cistern.md', CISTERN)
+    await world.files.writeText('notes/plan.md', '---\nid: plan\n---\n\n# The Plan\n\nMara goes first.\n')
+    await openStory(world)
+    await userEvent.click(screen.getByRole('button', { name: /📇 library/i }))
+    const library = within(await screen.findByRole('region', { name: /^library$/i }))
+    await userEvent.click(library.getByRole('button', { name: 'Open character Mara' }))
+    const named = within(await library.findByRole('region', { name: 'Named in' }))
+    expect(named.getByRole('button', { name: 'Open scene The Dry Cistern' })).toBeInTheDocument()
+    expect(named.getByRole('button', { name: 'Open note The Plan' })).toBeInTheDocument()
+    await userEvent.click(named.getByRole('button', { name: 'Open note The Plan' }))
+    const notes = within(await screen.findByRole('region', { name: /^notes$/i }))
+    await waitFor(() => expect(notes.getByRole('textbox', { name: /^title$/i })).toHaveValue('The Plan'))
+    // And from the note, the same page opens inside the card.
+    await waitFor(() => expect(mentionsIn(notes.getByRole('textbox', { name: /prose/i }))).toHaveLength(1))
+    await userEvent.hover(mentionsIn(notes.getByRole('textbox', { name: /prose/i }))[0])
+    await screen.findByRole('dialog', { name: /mention: mara/i })
+    await userEvent.click(screen.getByRole('button', { name: 'Expand Mara' }))
+    const page = await screen.findByLabelText('Mara, in full')
+    expect(page).toHaveTextContent('The door-woman.')
+    expect(within(page).getByRole('button', { name: 'Open scene The Dry Cistern' })).toBeInTheDocument()
+  })
+
   test('an alias typed on a page is a name the prose lights up', async () => {
     const world = embersWorld()
     await world.files.writeText('scenes/the-dry-cistern.md', CISTERN)

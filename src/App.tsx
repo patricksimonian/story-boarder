@@ -14,7 +14,7 @@ import { exportPlayable, type ExportResult } from './interchange/export'
 import { importToFiles } from './interchange/import'
 import { applySuggestion, type LiftSuggestion } from './interchange/lift'
 import runtimeJs from './player/runtime.generated.js?raw'
-import { aliasProposals, developmentLines, hashText, localLedgerStore, modelVerdicts, storyOrder, type Ledger, type LedgerStore } from './assistant/ledger'
+import { aliasProposals, developmentLines, developmentsFor, hashText, localLedgerStore, modelVerdicts, storyOrder, type Ledger, type LedgerStore } from './assistant/ledger'
 import { continuityRequest, findingsFrom, type ContinuityFinding, type ContinuityOutput } from './assistant/continuity'
 import { checkHealth, type Health } from './assistant/health'
 import { ledgerEntryFrom, readSceneRequest, type ReadSceneOutput } from './assistant/readScene'
@@ -22,7 +22,7 @@ import { run } from './assistant/runner'
 import { assistantSettings, DEFAULT_PROMPTS, loadPrompts, savePrompts, withAssistant, type AssistantSettings, type Prompts } from './assistant/settings'
 import type { MentionContext } from './mentions/context'
 import { describeTarget } from './mentions/describe'
-import { dictionary, findMentions, itemText, mentionIndex } from './mentions/match'
+import { dictionary, findMentions, itemText, mentionIndex, type Target } from './mentions/match'
 import { MENTIONS_PATH, parseTargetKey, phraseKey, serializeVerdicts, targetKey, withVerdict } from './mentions/verdicts'
 import { readSceneFromHash, readViewFromHash, viewToHash, type View } from './state/view'
 import { loadStory, type LoadedStory } from './story/loadStory'
@@ -70,6 +70,7 @@ import { ImportDialog, LiftDialog } from './ui/ImportDialogs'
 import { PullDialog, SyncView, type SyncSettings } from './ui/SyncView'
 import { NewActDialog, NewSceneDialog, NewStorylineDialog, type Creating } from './ui/CreateDialog'
 import { Minimap } from './ui/Minimap'
+import { mimeOf } from './ui/images'
 import { LibraryView } from './ui/LibraryView'
 import { NotesView } from './ui/NotesView'
 import { Overview } from './ui/Overview'
@@ -669,10 +670,25 @@ export default function App({
     const verdicts = [...(story.verdicts[item] ?? []), ...modelVerdicts(ledger[item])]
     return {
       find: (text) => findMentions(text, dict, { self: item, verdicts }),
-      describe: (key) => describeTarget(story, key, item, index, developmentLines(ledger, story, key, item)),
+      describe: (key) => describeTarget(story, key, item, index, developmentLines(ledger, story, key, item), developmentsFor(ledger, story, key)),
       onOpen: (key) => void openTarget(key),
       onVerdict: (quote, entity) => void ruleOnMention(item, quote, entity),
+      imageUrl: async (path) => {
+        if (!folder) return null
+        try {
+          const bytes = await folder.files.readBinary(path)
+          return URL.createObjectURL(new Blob([bytes.slice().buffer], { type: mimeOf(path) }))
+        } catch {
+          return null
+        }
+      },
     }
+  }
+
+  /** Everywhere an item is named, most often first: the reverse of a mention, shown on the page itself. */
+  function namedIn(item: TargetKey | null): Target[] {
+    if (!item || !index) return []
+    return [...(index.get(item) ?? [])].sort((a, b) => b.count - a.count || a.item.title.localeCompare(b.item.title)).map((site) => site.item)
   }
 
   /** Goes to the thing a mention names: a scene in the editor, a page in its view. */
@@ -1527,6 +1543,8 @@ export default function App({
             onEdit={editNote}
             onDelete={() => void deleteNoteAction()}
             mentions={noteMentions}
+            namedIn={namedIn(noteItem)}
+            onOpenTarget={(key) => void openTarget(key)}
             canRead={coachingOn}
             reading={noteItem !== null && reading.has(noteItem)}
             readProblem={readProblem}
@@ -1567,6 +1585,8 @@ export default function App({
             onAddImages={(picked) => void addImagesToReference(picked)}
             onDelete={() => void deleteReferenceAction()}
             mentions={refMentions}
+            namedIn={namedIn(refItem)}
+            onOpenTarget={(key) => void openTarget(key)}
             aliasProposals={refDraft ? proposalsFor(refDraft.entity) : []}
             onAcceptAlias={(alias) => {
               const current = refDraftRef.current
@@ -1625,6 +1645,8 @@ export default function App({
           onRestore={(text) => void restoreSceneVersion(text)}
           onAddImages={(picked) => void addImagesToScene(picked)}
           mentions={sceneMentions}
+          namedIn={namedIn(sceneItem)}
+          onOpenTarget={(key) => void openTarget(key)}
           canRead={coachingOn}
           reading={sceneItem !== null && reading.has(sceneItem)}
           readProblem={readProblem}

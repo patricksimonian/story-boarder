@@ -2,15 +2,18 @@ import { EditorContent, useEditor } from '@tiptap/react'
 import { useEffect, useRef, useState } from 'react'
 import type { TargetKey } from '../domain/types'
 import { proseExtensions, readProse } from '../editor/prose'
-import { KIND_LABEL, type MentionContext } from '../mentions/context'
+import { KIND_LABEL, type MentionCard, type MentionContext } from '../mentions/context'
+import { pageParagraphs } from '../mentions/describe'
 import type { Certainty } from '../mentions/match'
+import { targetKey } from '../mentions/verdicts'
 
 /**
  * The prose field: TipTap over Markdown. Mount it with a key that changes
  * whenever the prose is replaced from outside (another scene, a disk
  * follow, a resolved conflict) — while the writer types, the editor owns
  * its own document and only reports Markdown outward. With a mention
- * context it also draws what the text names and answers for it on hover.
+ * context it also draws what the text names and answers for it: hover
+ * or click opens the card, Ctrl+click goes straight to the page.
  */
 export function ProseEditor({
   markdown,
@@ -90,6 +93,16 @@ export function ProseEditor({
         if (!mentions || inTip(e.target)) return
         const el = mentionAt(e.target)
         cancelClose()
+        if (el && (e.ctrlKey || e.metaKey)) {
+          // A mention is a link: Ctrl+click follows it, the way links in an editor do.
+          const targets = (el.dataset.targets ?? '').split('|').filter(Boolean)
+          if (targets.length === 1) {
+            e.preventDefault()
+            setTip(null)
+            mentions.onOpen(targets[0])
+            return
+          }
+        }
         setTip(el ? tipFrom(el, true) : null)
       }}
       onKeyDown={(e) => {
@@ -104,6 +117,7 @@ export function ProseEditor({
         <MentionTip
           tip={tip}
           mentions={mentions}
+          onPin={() => setTip((t) => (t ? { ...t, pinned: true } : t))}
           onClose={() => setTip(null)}
           onFix={(text) => {
             editor.chain().focus().insertContentAt({ from: tip.from, to: tip.to }, text).run()
@@ -133,45 +147,125 @@ function corrected(quote: string, title: string): string {
   return possessive ? `${title}${possessive[0]}` : title
 }
 
+const emptyCard = (key: TargetKey): MentionCard => ({
+  key,
+  kind: 'note',
+  title: key,
+  lines: [],
+  others: [],
+  othersCount: 0,
+  body: '',
+  tags: [],
+  aliases: [],
+  developments: [],
+  namedIn: [],
+  images: [],
+})
+
+/** A picture from the page's mood board, read from the story folder once the card shows it. */
+function CardImage({ path, load, large }: { path: string; load?: (path: string) => Promise<string | null>; large: boolean }) {
+  const [url, setUrl] = useState<string | null>(null)
+  useEffect(() => {
+    let live = true
+    let made: string | null = null
+    if (load) {
+      void load(path).then((next) => {
+        if (!live) {
+          if (next) URL.revokeObjectURL(next)
+          return
+        }
+        made = next
+        setUrl(next)
+      })
+    }
+    return () => {
+      live = false
+      if (made) URL.revokeObjectURL(made)
+    }
+  }, [path, load])
+  if (!url) return null
+  const name = path.split('/').at(-1) ?? path
+  return <img className={`mention-image ${large ? 'large' : ''}`} src={url} alt={name} title={name} />
+}
+
 function MentionTip({
   tip,
   mentions,
+  onPin,
   onClose,
   onFix,
 }: {
   tip: Tip
   mentions: MentionContext
+  onPin: () => void
   onClose: () => void
   onFix: (text: string) => void
 }) {
-  const cards = tip.targets.map((key) => mentions.describe(key) ?? { key, kind: 'note' as const, title: key, lines: [], others: [], othersCount: 0 })
+  const [expanded, setExpanded] = useState<TargetKey | null>(null)
+  const cards = tip.targets.map((key) => mentions.describe(key) ?? emptyCard(key))
   const verdict = (entity: TargetKey | null) => {
     mentions.onVerdict(tip.quote, entity)
     onClose()
   }
   const one = cards.length === 1 ? cards[0] : undefined
   return (
-    <div className="mention-tip" role="dialog" aria-label={`Mention: ${tip.quote}`} style={{ top: tip.top, left: tip.left }}>
+    <div
+      className={`mention-tip ${expanded ? 'expanded' : ''}`}
+      role="dialog"
+      aria-label={`Mention: ${tip.quote}`}
+      style={{ top: tip.top, left: tip.left }}
+    >
       {tip.certainty === 'probable' && one && <p className="mention-ask">Did you mean {one.title}?</p>}
       {tip.certainty === 'model' && <p className="mention-ask">Read as a mention — confirm it, or say it isn’t one.</p>}
       {cards.map((card) => (
         <div key={card.key} className="mention-card">
           <div className="mention-head">
             <span className="mention-kind">{KIND_LABEL[card.kind]}</span>
-            <button type="button" className="goto" aria-label={`Open ${KIND_LABEL[card.kind].toLowerCase()} ${card.title}`} onClick={() => mentions.onOpen(card.key)}>
+            <button
+              type="button"
+              className="goto mention-link"
+              aria-label={`Open ${KIND_LABEL[card.kind].toLowerCase()} ${card.title}`}
+              title="Go to the page (Ctrl+click on the mention does the same)"
+              onClick={() => mentions.onOpen(card.key)}
+            >
               {card.title} ↗
             </button>
+            <button
+              type="button"
+              className="mention-expand"
+              aria-expanded={expanded === card.key}
+              aria-label={`${expanded === card.key ? 'Collapse' : 'Expand'} ${card.title}`}
+              onClick={() => {
+                onPin()
+                setExpanded(expanded === card.key ? null : card.key)
+              }}
+            >
+              {expanded === card.key ? 'Collapse' : 'Expand'}
+            </button>
           </div>
-          {card.lines.map((line, i) => (
-            <p key={i} className="mention-line">
-              {line}
-            </p>
-          ))}
-          {card.othersCount > 0 && (
-            <p className="mention-others">
-              Also named in {card.others.join(', ')}
-              {card.othersCount > card.others.length ? ` and ${card.othersCount - card.others.length} more` : ''}
-            </p>
+          {expanded === card.key ? (
+            <ExpandedCard card={card} onOpen={mentions.onOpen} imageUrl={mentions.imageUrl} />
+          ) : (
+            <>
+              {card.images.length > 0 && (
+                <div className="mention-images">
+                  {card.images.slice(0, 3).map((path) => (
+                    <CardImage key={path} path={path} load={mentions.imageUrl} large={false} />
+                  ))}
+                </div>
+              )}
+              {card.lines.map((line, i) => (
+                <p key={i} className="mention-line">
+                  {line}
+                </p>
+              ))}
+              {card.othersCount > 0 && (
+                <p className="mention-others">
+                  Also named in {card.others.join(', ')}
+                  {card.othersCount > card.others.length ? ` and ${card.othersCount - card.others.length} more` : ''}
+                </p>
+              )}
+            </>
           )}
         </div>
       ))}
@@ -201,6 +295,66 @@ function MentionTip({
           Not a mention
         </button>
       </div>
+    </div>
+  )
+}
+
+/** The whole page inside the card: its text, its tags and aliases, everything recorded about it, everywhere it is named. */
+function ExpandedCard({
+  card,
+  onOpen,
+  imageUrl,
+}: {
+  card: MentionCard
+  onOpen: (key: TargetKey) => void
+  imageUrl?: (path: string) => Promise<string | null>
+}) {
+  const paragraphs = pageParagraphs(card.body)
+  return (
+    <div className="mention-page" aria-label={`${card.title}, in full`}>
+      {card.images.length > 0 && (
+        <div className="mention-images">
+          {card.images.map((path) => (
+            <CardImage key={path} path={path} load={imageUrl} large />
+          ))}
+        </div>
+      )}
+      {paragraphs.length === 0 ? <p className="mention-line mention-empty">The page is empty.</p> : paragraphs.map((p, i) => <p key={i} className="mention-line">{p}</p>)}
+      {(card.tags.length > 0 || card.aliases.length > 0) && (
+        <p className="mention-others">
+          {card.tags.length > 0 && <span>Tags: {card.tags.join(', ')}. </span>}
+          {card.aliases.length > 0 && <span>Also called {card.aliases.join(', ')}.</span>}
+        </p>
+      )}
+      {card.developments.length > 0 && (
+        <div className="mention-section">
+          <h5>Developments</h5>
+          <ul className="mention-list">
+            {card.developments.map((d, i) => (
+              <li key={i}>
+                <span title={d.quote}>{d.fact}</span>{' '}
+                <button type="button" className="goto" aria-label={`Open ${d.item.kind} ${d.item.title}`} onClick={() => onOpen(targetKey(d.item))}>
+                  {d.item.title} ↗
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {card.namedIn.length > 0 && (
+        <div className="mention-section">
+          <h5>Named in</h5>
+          <ul className="mention-list">
+            {card.namedIn.map((item) => (
+              <li key={targetKey(item)}>
+                <button type="button" className="goto" aria-label={`Open ${item.kind} ${item.title}`} onClick={() => onOpen(targetKey(item))}>
+                  {item.title} ↗
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   )
 }

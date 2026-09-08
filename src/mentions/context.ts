@@ -1,5 +1,5 @@
 import type { TargetKey } from '../domain/types'
-import type { MentionKind, Span } from './match'
+import type { MentionKind, Span, Target } from './match'
 
 /**
  * What the prose editor needs from the app to draw mentions and answer
@@ -14,18 +14,30 @@ export interface MentionContext {
   onOpen: (key: TargetKey) => void
   /** The writer's ruling on a phrase in this item: means this, or nothing. */
   onVerdict: (quote: string, entity: TargetKey | null) => void
+  /** A story-folder image as something an <img> can show, or null when it cannot be read. */
+  imageUrl?: (path: string) => Promise<string | null>
 }
 
 export interface MentionCard {
   key: TargetKey
   kind: MentionKind
   title: string
-  /** What the tooltip says under the title — developments when there are any, otherwise how the page opens. */
+  /** What the collapsed card says under the title — developments when there are any, otherwise how the page opens. */
   lines: string[]
   /** Titles of the nearest other items naming this thing. */
   others: string[]
   /** How many other items name it in all. */
   othersCount: number
+  /** The whole page, as text, for the expanded card. */
+  body: string
+  tags: string[]
+  aliases: string[]
+  /** Every development recorded about it, in story order, with where. */
+  developments: { item: Target; fact: string; quote: string }[]
+  /** Every item that names it, nearest first, each a place to go. */
+  namedIn: Target[]
+  /** The mood board: story-folder-relative paths under assets/. */
+  images: string[]
 }
 
 export const KIND_LABEL: Record<MentionKind, string> = {

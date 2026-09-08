@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import type { FileAccess } from '../adapters/types'
-import type { ReferenceEntity, ReferenceKind, Slug, Story } from '../domain/types'
+import type { ReferenceEntity, ReferenceKind, Slug, Story, TargetKey } from '../domain/types'
 import type { MentionContext } from '../mentions/context'
+import type { Target } from '../mentions/match'
+import { NamedIn } from './NamedIn'
 import { MoodBoard } from './MoodBoard'
 import { ProseEditor } from './ProseEditor'
 
@@ -57,6 +59,7 @@ function AliasesField({
         <input
           aria-label="Aliases"
           placeholder="the smith, the old man"
+          className="ml-2"
           title="Other names the prose uses for this; each one lights up as a mention"
           value={text}
           onChange={(e) => {
@@ -119,9 +122,11 @@ export function LibraryView({
   onAddImages,
   onDelete,
   mentions,
+  namedIn = [],
+  onOpenTarget = () => { },
   aliasProposals = [],
-  onAcceptAlias = () => {},
-  onDismissAlias = () => {},
+  onAcceptAlias = () => { },
+  onDismissAlias = () => { },
 }: {
   story: Story
   files: FileAccess
@@ -134,6 +139,9 @@ export function LibraryView({
   onAddImages: (picked: File[]) => void
   onDelete: () => void
   mentions?: MentionContext
+  /** Everywhere the open page is named, most often first. */
+  namedIn?: Target[]
+  onOpenTarget?: (key: TargetKey) => void
   /** Phrases the scene read found naming the open page in more than one place. */
   aliasProposals?: string[]
   onAcceptAlias?: (alias: string) => void
@@ -246,6 +254,7 @@ export function LibraryView({
               onChange={(body) => onEdit({ ...selected, body })}
               mentions={mentions}
             />
+            <NamedIn items={namedIn} onOpen={onOpenTarget} />
             <MoodBoard
               images={selected.images}
               files={files}

@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FileAccess, GitClient, GitCommit } from '../adapters/types'
-import type { Scene, Slug, Story } from '../domain/types'
+import type { Scene, Slug, Story, TargetKey } from '../domain/types'
 import { insertBeat, moveBeat, removeBeat, setBeat } from '../editor/beats'
 import type { MentionContext } from '../mentions/context'
+import type { Target } from '../mentions/match'
+import { NamedIn } from './NamedIn'
 import type { Placement } from '../story/mutations'
 import { EngineEditor } from './EngineEditor'
 import { MoodBoard } from './MoodBoard'
@@ -29,6 +31,8 @@ export function SceneEditor({
   onRestore,
   onAddImages,
   mentions,
+  namedIn = [],
+  onOpenTarget = () => {},
   canRead = false,
   reading = false,
   readProblem = null,
@@ -51,6 +55,9 @@ export function SceneEditor({
   onAddImages: (picked: File[]) => void
   /** What the prose names, and what to do about it; absent before a story is loaded. */
   mentions?: MentionContext
+  /** Everywhere this scene is named by title, most often first. */
+  namedIn?: Target[]
+  onOpenTarget?: (key: TargetKey) => void
   /** Whether Claude Code can be reached for a read. */
   canRead?: boolean
   /** A read of this scene is in flight. */
@@ -270,6 +277,7 @@ export function SceneEditor({
               mentions={mentions}
             />
           </div>
+          <NamedIn items={namedIn} onOpen={onOpenTarget} />
           <MoodBoard
             images={scene.images}
             files={files}
