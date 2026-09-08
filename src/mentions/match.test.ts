@@ -209,6 +209,23 @@ describe('verdicts', () => {
   })
 })
 
+describe('what the read said is missing', () => {
+  test('a name the read flagged is drawn as unknown wherever it appears, in any case, unless something known claims it or the writer said it is nothing', () => {
+    const dict = dictionary(story())
+    const spans = findMentions('Beyond the Atacam lay Kal’ewei. The atacam again, and Mara.', dict, { unknowns: ['the Atacam', 'Kal’ewei'] })
+    expect(brief(spans)).toEqual([
+      ['the Atacam', '', 'unknown'],
+      ['Kal’ewei', '', 'unknown'],
+      ['The atacam', '', 'unknown'],
+      ['Mara', 'character:mara', 'certain'],
+    ])
+    const silenced = findMentions('Beyond the Atacam.', dict, { unknowns: ['the Atacam'], verdicts: [{ quote: 'the Atacam', entity: null, by: 'writer' }] })
+    expect(silenced).toEqual([])
+    // Nothing is guessed from a capital letter: an unflagged name stays plain.
+    expect(findMentions('Beyond Kal’ewei lay nothing.', dict)).toEqual([])
+  })
+})
+
 describe('mentionIndex', () => {
   test('lists, per thing, every item that names it and how often', () => {
     const s = story()

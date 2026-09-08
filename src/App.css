@@ -2774,3 +2774,58 @@ button.sb-pen:focus-visible {
   font-weight: 600;
   margin-right: 4px;
 }
+.read-notes {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.read-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 8px;
+  margin: 4px 0;
+  padding: 4px 0;
+  border-top: 1px dashed var(--line);
+}
+.read-kind,
+.coach-kind {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  min-width: 78px;
+}
+.read-note.continuity .read-kind {
+  color: #a0522d;
+}
+.read-note.variable .read-kind {
+  color: #3a6ea5;
+}
+.read-note.cast .read-kind {
+  color: #3a7d44;
+}
+.read-message {
+  flex: 1 1 320px;
+}
+.read-quote {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--muted);
+  font-style: italic;
+}
+.mention-unknown {
+  text-decoration-style: wavy;
+  text-decoration-color: #e0862b;
+  text-decoration-thickness: 1.5px;
+}
+.mention-tip-unknown {
+  border-color: #e0862b;
+}
+.mention-actions button.suggested {
+  border-color: #e0862b;
+  font-weight: 600;
+}
+.read-note.define .read-kind {
+  color: #e0862b;
+}

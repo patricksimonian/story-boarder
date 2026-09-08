@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 // App.css is pulled in by index.css, inside Tailwind's components layer.
 import type { OpenedFolder, Platform, ProcessRunner } from './adapters/types'
-import type { Note, Playthrough, ReferenceEntity, ReferenceKind, Scene, Slug, StoryManifest, TargetKey, VariableRegistry } from './domain/types'
+import type { Note, Playthrough, ReferenceEntity, ReferenceKind, Scene, Slug, StoryManifest, TargetKey, Variable, VariableRegistry } from './domain/types'
 import { analyse } from './engine/analyse'
 import { parseNoteFile, serializeNoteFile } from './files/noteFile'
 import { parseReferenceFile, serializeReferenceFile } from './files/referenceFile'
@@ -14,7 +14,7 @@ import { exportPlayable, type ExportResult } from './interchange/export'
 import { importToFiles } from './interchange/import'
 import { applySuggestion, type LiftSuggestion } from './interchange/lift'
 import runtimeJs from './player/runtime.generated.js?raw'
-import { aliasProposals, developmentLines, developmentsFor, hashText, localLedgerStore, modelVerdicts, readSummary, storyOrder, type Ledger, type LedgerStore } from './assistant/ledger'
+import { aliasProposals, developmentLines, developmentsFor, hashText, localLedgerStore, modelUnknowns, modelVerdicts, readSummary, storyOrder, type DefineKind, type EditorNote, type Ledger, type LedgerStore } from './assistant/ledger'
 import { continuityRequest, findingsFrom, type ContinuityFinding, type ContinuityOutput } from './assistant/continuity'
 import { checkHealth, type Health } from './assistant/health'
 import { ledgerEntryFrom, readSceneRequest, type ReadSceneOutput } from './assistant/readScene'
@@ -80,7 +80,7 @@ import { RawEditor } from './ui/RawEditor'
 import { SceneEditor } from './ui/SceneEditor'
 import { SearchView } from './ui/SearchView'
 import { SettingsView } from './ui/SettingsView'
-import type { ReadInfo } from './ui/ReadOutcome'
+import type { ReadInfo, ReadNote } from './ui/ReadOutcome'
 import { SimulateView } from './ui/SimulateView'
 import { StatsView } from './ui/StatsView'
 import { Sidebar } from './ui/Sidebar'
@@ -669,11 +669,14 @@ export default function App({
     if (!loaded || !dict || !index) return undefined
     const { story } = loaded
     const verdicts = [...(story.verdicts[item] ?? []), ...modelVerdicts(ledger[item])]
+    const unknowns = modelUnknowns(ledger[item])
     return {
-      find: (text) => findMentions(text, dict, { self: item, verdicts }),
+      find: (text) => findMentions(text, dict, { self: item, verdicts, unknowns }),
       describe: (key) => describeTarget(story, key, item, index, developmentLines(ledger, story, key, item), developmentsFor(ledger, story, key)),
       onOpen: (key) => void openTarget(key),
       onVerdict: (quote, entity) => void ruleOnMention(item, quote, entity),
+      onCreate: (kind, title) => void defineThing(kind, title),
+      suggestedKind: (quote) => ledger[item]?.notes?.find((n) => n.kind === 'define' && !n.entity && n.name && phraseKey(n.name) === phraseKey(quote))?.defineAs,
       imageUrl: async (path) => {
         if (!folder) return null
         try {
@@ -686,16 +689,81 @@ export default function App({
     }
   }
 
-  /** What the last read of an item found, for the page it was pressed on. */
+  /** What the last read of an item found, for the page it was pressed on, with the fixes the app can apply. */
   function readInfo(item: TargetKey | null): ReadInfo | null {
-    if (!item) return null
+    if (!item || !loaded) return null
     const entry = ledger[item]
     const summary = readSummary(entry)
     if (!entry || !summary) return null
+    const { story } = loaded
+    const parsed = parseTargetKey(item)
+    const scene = parsed?.kind === 'scene' ? story.scenes.get(parsed.id) : undefined
+    const notes: ReadNote[] = (entry.notes ?? []).map((note) => {
+      const shown: ReadNote = { ...note }
+      if (note.entity) shown.entityTitle = dict?.targets.get(note.entity)?.title
+      if (note.kind === 'define') shown.action = defineAction(note, scene) ?? undefined
+      return shown
+    })
     return {
       summary,
+      notes,
       developments: entry.developments.map((d) => ({ title: dict?.targets.get(d.entity)?.title ?? d.entity, fact: d.fact, quote: d.quote })),
     }
+  }
+
+  /** The one-click fix for a define note: declare the variable, add the character to the scene, or create the thing. */
+  function defineAction(note: EditorNote, scene: Scene | undefined): ReadNote['action'] | null {
+    const current = loadedRef.current
+    if (!current) return null
+    const { story } = current
+    if (note.defineAs === 'variable' && note.variable) {
+      const proposal = note.variable
+      if (story.registry.variables.some((v) => v.id === proposal.id)) return null
+      return { label: `Declare ${proposal.id}`, run: () => void declareVariable(proposal) }
+    }
+    if (note.entity) {
+      const known = parseTargetKey(note.entity)
+      if (known?.kind === 'character' && scene && !scene.characters.includes(known.id)) {
+        return { label: `Add ${dict?.targets.get(note.entity)?.title ?? known.id} to the scene`, run: () => addCharacterToScene(known.id) }
+      }
+      return null
+    }
+    if (!note.name || !note.defineAs || note.defineAs === 'variable') return null
+    const name = note.name
+    const kind = note.defineAs
+    const noun = kind === 'lore' ? 'lore page' : kind
+    return { label: `Create ${kind === 'note' || kind === 'scene' ? 'a' : kind === 'lore' ? 'a' : 'a'} ${noun} for ${name}`, run: () => void defineThing(kind, name) }
+  }
+
+  /** Creates the thing a define note or an orange name asks for, without leaving the page the writer is on. */
+  async function defineThing(kind: DefineKind, title: string): Promise<void> {
+    if (!folder || kind === 'variable') return
+    if (kind === 'scene') await createScene(folder.files, { title, storylines: [] })
+    else if (kind === 'note') await createNote(folder.files, title)
+    else await createReference(folder.files, kind, title)
+    await reload(folder)
+  }
+
+  /** A proposed variable, declared through the ordinary registry save — as if typed in the Variables view. */
+  async function declareVariable(proposal: NonNullable<ReadNote['variable']>): Promise<void> {
+    const current = loadedRef.current
+    if (!folder || !current || current.story.registry.variables.some((v) => v.id === proposal.id)) return
+    let variable: Variable
+    if (proposal.type === 'boolean') variable = { id: proposal.id, type: 'boolean', initial: proposal.initial === 'true' }
+    else if (proposal.type === 'number') variable = { id: proposal.id, type: 'number', initial: Number(proposal.initial) || 0 }
+    else {
+      const values = proposal.initial.split(/[,|/]/).map((v) => v.trim()).filter(Boolean)
+      variable = { id: proposal.id, type: 'enum', values: values.length ? values : ['unset'], initial: values[0] ?? 'unset' }
+    }
+    if (proposal.description) variable.description = proposal.description
+    await writeEngine(() => saveRegistry(folder.files, { variables: [...current.story.registry.variables, variable] }))
+  }
+
+  /** A library character the read found on the open scene, listed on it — the same edit typing the field would make. */
+  function addCharacterToScene(id: Slug): void {
+    const current = draftRef.current
+    if (!current || current.scene.characters.includes(id)) return
+    editScene({ ...current.scene, characters: [...current.scene.characters, id] })
   }
 
   /** Everywhere an item is named, most often first: the reverse of a mention, shown on the page itself. */

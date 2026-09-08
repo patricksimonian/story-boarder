@@ -113,6 +113,33 @@ describe('mentions in the prose editor', () => {
     expect(screen.queryByLabelText('Rook, in full')).not.toBeInTheDocument()
   })
 
+  test('an orange name offers to create the thing, the read’s guess first, or to say it is nothing', async () => {
+    const ctx = context({
+      find: (text) => {
+        const at = text.indexOf('Kal’ewei')
+        return at < 0 ? [] : [{ from: at, to: at + 8, quote: 'Kal’ewei', targets: [], certainty: 'unknown' }]
+      },
+      onCreate: vi.fn(),
+      suggestedKind: () => 'place',
+    })
+    render(<ProseEditor markdown="The rail to Kal’ewei is done." onChange={() => {}} mentions={ctx} />)
+    await waitFor(() => expect(mentionEls()).toHaveLength(1))
+    expect(mentionEls()[0].className).toContain('mention-unknown')
+    await userEvent.hover(mentionEls()[0])
+    const tip = await screen.findByRole('dialog', { name: /mention: kal’ewei/i })
+    expect(tip).toHaveTextContent('The story has nothing for Kal’ewei yet; the read thought it wants a place.')
+    const buttons = within(tip).getAllByRole('button').map((b) => b.textContent)
+    expect(buttons[0]).toBe('Create place')
+    expect(buttons).toContain('Not a thing')
+    await userEvent.click(within(tip).getByRole('button', { name: 'Create place' }))
+    expect(ctx.onCreate).toHaveBeenCalledWith('place', 'Kal’ewei')
+
+    await userEvent.hover(mentionEls()[0])
+    await screen.findByRole('dialog')
+    await userEvent.click(screen.getByRole('button', { name: 'Not a thing' }))
+    expect(ctx.onVerdict).toHaveBeenCalledWith('Kal’ewei', null)
+  })
+
   test('a near miss asks, and fixing the spelling is an edit that keeps the possessive', async () => {
     const ctx = context()
     const onChange = vi.fn()

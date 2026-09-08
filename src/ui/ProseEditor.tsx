@@ -53,7 +53,7 @@ export function ProseEditor({
 
   const tipFrom = (el: HTMLElement, pinned: boolean): Tip | null => {
     const targets = (el.dataset.targets ?? '').split('|').filter(Boolean)
-    if (targets.length === 0) return null
+    if (targets.length === 0 && el.dataset.certainty !== 'unknown') return null
     const rect = el.getBoundingClientRect()
     const box = wrap.current?.getBoundingClientRect()
     return {
@@ -208,6 +208,43 @@ function MentionTip({
     onClose()
   }
   const one = cards.length === 1 ? cards[0] : undefined
+  if (tip.certainty === 'unknown') {
+    const name = tip.quote.replace(/['’]s?$/, '')
+    const suggested = mentions.suggestedKind?.(tip.quote)
+    const kinds: { kind: 'character' | 'place' | 'lore' | 'scene' | 'note'; label: string }[] = [
+      { kind: 'character', label: 'character' },
+      { kind: 'place', label: 'place' },
+      { kind: 'lore', label: 'lore page' },
+      { kind: 'scene', label: 'scene' },
+      { kind: 'note', label: 'note' },
+    ]
+    const ordered = [...kinds].sort((a, b) => (a.kind === suggested ? -1 : b.kind === suggested ? 1 : 0))
+    return (
+      <div className="mention-tip mention-tip-unknown" role="dialog" aria-label={`Mention: ${tip.quote}`} style={{ top: tip.top, left: tip.left }}>
+        <p className="mention-ask">
+          The story has nothing for <strong>{name}</strong> yet{suggested ? `; the read thought it wants a ${suggested === 'lore' ? 'lore page' : suggested}` : ''}.
+        </p>
+        <div className="mention-actions">
+          {ordered.map(({ kind, label }) => (
+            <button
+              key={kind}
+              type="button"
+              className={kind === suggested ? 'suggested' : ''}
+              onClick={() => {
+                mentions.onCreate?.(kind, name)
+                onClose()
+              }}
+            >
+              Create {label}
+            </button>
+          ))}
+          <button type="button" onClick={() => verdict(null)}>
+            Not a thing
+          </button>
+        </div>
+      </div>
+    )
+  }
   return (
     <div
       className={`mention-tip ${expanded ? 'expanded' : ''}`}

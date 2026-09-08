@@ -53,6 +53,9 @@ describe('the ledger', () => {
         now,
       ),
     ).toBe('Read 3 min ago: 1 development, 2 phrases resolved, 1 name refused')
+    expect(
+      readSummary(entry({ readAt: now, notes: [{ kind: 'define', message: 'm', quote: 'q', name: 'the Atacam', defineAs: 'place' }, { kind: 'other', message: 'm', quote: 'q' }] }), now),
+    ).toBe('Read just now: 2 editor’s notes, 1 thing to define')
   })
 
   test("the read's mentions and rejections are the model's verdicts", () => {

@@ -36,7 +36,7 @@ Mara talks first.
 
 ## Prose
 
-Mara watched the door out of habit. The door-woman stopped watching it.
+Mara watched the door of the cistern out of habit. The door-woman stopped watching it.
 `
 
 const EMBERS = `---
@@ -68,7 +68,22 @@ function readingRunner(): StubProcessRunner {
     const mentions = /door-woman/.test(stdin) ? [{ quote: 'The door-woman', entity: 'character:mara' }] : []
     const developments =
       item === 'scene:the-dry-cistern' ? [{ entity: 'character:mara', fact: 'Mara stops watching the door.', quote: 'The door-woman stopped watching it.' }] : []
-    return { mentions, rejected: [], developments }
+    const notes =
+      item === 'scene:the-dry-cistern'
+        ? [
+            { kind: 'define', message: 'The cistern is somewhere the story returns to and has no page.', quote: 'Mara watched the door', name: 'the cistern', defineAs: 'place' },
+            {
+              kind: 'define',
+              message: 'Whether Mara has stopped keeping watch is state a later scene will want.',
+              quote: 'The door-woman stopped watching it.',
+              name: 'mara_off_guard',
+              defineAs: 'variable',
+              variable: { id: 'mara_off_guard', type: 'boolean', initial: 'false', description: 'Mara has let her guard down.' },
+            },
+            { kind: 'loose-end', message: 'Why she watches doors is raised and not answered.', quote: 'out of habit' },
+          ]
+        : []
+    return { mentions, rejected: [], developments, notes }
   })
   return runner
 }
@@ -100,19 +115,43 @@ describe('the scene read', () => {
     const read = await within(editor).findByRole('button', { name: 'Read' })
     await waitFor(() => expect(read).toBeEnabled())
     await userEvent.click(read)
-    await waitFor(() => expect(mentionsIn(editor).map((el) => el.textContent)).toEqual(['Mara', 'The door-woman']))
-    expect(mentionsIn(editor)[1].className).toContain('mention-model')
+    await waitFor(() => expect(mentionsIn(editor).map((el) => el.textContent)).toEqual(['Mara', 'the cistern', 'The door-woman']))
+    expect(mentionsIn(editor).find((el) => el.textContent === 'The door-woman')?.className).toContain('mention-model')
     expect(readCalls(runner)).toHaveLength(1)
     expect(readCalls(runner)[0].stdin).toContain('# The item: scene "The Dry Cistern" (scene:the-dry-cistern)')
     expect(readCalls(runner)[0].stdin).toContain('"Mara" → character:mara')
 
-    // The scene says what the read found, right under the button.
+    // The scene says what the read found, right under the button: the notes with their fixes, then the developments.
     const outcome = within(editor).getByRole('region', { name: 'Last read' })
-    expect(outcome).toHaveTextContent('Read just now: 1 development, 1 phrase resolved')
+    expect(outcome).toHaveTextContent('Read just now: 3 editor’s notes, 2 things to define, 1 development, 1 phrase resolved')
     expect(outcome).toHaveTextContent('Mara Mara stops watching the door.')
+    expect(outcome).toHaveTextContent('Why she watches doors is raised and not answered.')
+    expect(within(outcome).getByRole('button', { name: 'Create a place for the cistern' })).toBeInTheDocument()
+
+    // A thing the read said is missing is drawn in orange; its card creates the page in one click.
+    await waitFor(() => expect(mentionsIn(editor).some((el) => el.className.includes('mention-unknown'))).toBe(true))
+    const orange = mentionsIn(editor).find((el) => el.className.includes('mention-unknown'))!
+    expect(orange).toHaveTextContent('the cistern')
+    await userEvent.hover(orange)
+    const unknownTip = await screen.findByRole('dialog', { name: /mention: the cistern/i })
+    expect(unknownTip).toHaveTextContent('The story has nothing for the cistern yet; the read thought it wants a place.')
+    await userEvent.click(within(unknownTip).getByRole('button', { name: 'Create place' }))
+    await waitFor(async () => expect(await world.files.exists('places/the-cistern.md')).toBe(true))
+    await waitFor(() => expect(mentionsIn(editor).find((el) => el.textContent === 'the cistern')?.className).toContain('mention-certain'))
+
+    // Declaring the proposed variable goes through the registry like a typed one.
+    await userEvent.click(within(within(editor).getByRole('region', { name: 'Last read' })).getByRole('button', { name: 'Declare mara_off_guard' }))
+    await waitFor(async () =>
+      expect(JSON.parse(await world.files.readText('variables.json')).variables).toContainEqual({
+        id: 'mara_off_guard',
+        type: 'boolean',
+        initial: false,
+        description: 'Mara has let her guard down.',
+      }),
+    )
 
     // Hovering the resolved phrase shows what this scene developed about her.
-    await userEvent.hover(mentionsIn(editor)[1])
+    await userEvent.hover(mentionsIn(editor).find((el) => el.textContent === 'The door-woman')!)
     const tip = await screen.findByRole('dialog', { name: /mention: the door-woman/i })
     expect(tip).toHaveTextContent('Mara stops watching the door.')
     expect(tip).toHaveTextContent('Confirm Mara')
@@ -140,7 +179,7 @@ describe('the scene read', () => {
     const coach = within(await screen.findByRole('region', { name: /^coach$/i }))
     expect(await coach.findByRole('heading', { name: 'Mara' })).toBeInTheDocument()
     expect(coach.getByText('Mara stops watching the door.')).toBeInTheDocument()
-    await userEvent.click(coach.getByRole('button', { name: 'Open scene The Dry Cistern' }))
+    await userEvent.click(coach.getAllByRole('button', { name: 'Open scene The Dry Cistern' })[0])
     await screen.findByRole('dialog', { name: /scene editor/i })
   })
 
@@ -178,11 +217,11 @@ describe('the scene read', () => {
     const read = await within(editor).findByRole('button', { name: 'Read' })
     await waitFor(() => expect(read).toBeEnabled())
     await userEvent.click(read)
-    await waitFor(() => expect(mentionsIn(editor)).toHaveLength(2))
-    await userEvent.hover(mentionsIn(editor)[1])
+    await waitFor(() => expect(mentionsIn(editor)).toHaveLength(3))
+    await userEvent.hover(mentionsIn(editor).find((el) => el.textContent === 'The door-woman')!)
     await screen.findByRole('dialog', { name: /mention: the door-woman/i })
     await userEvent.click(screen.getByRole('button', { name: 'Not a mention' }))
-    await waitFor(() => expect(mentionsIn(editor).map((el) => el.textContent)).toEqual(['Mara']))
+    await waitFor(() => expect(mentionsIn(editor).map((el) => el.textContent)).toEqual(['Mara', 'the cistern']))
     expect(JSON.parse(await world.files.readText('mentions.json'))).toEqual({
       'scene:the-dry-cistern': [{ quote: 'The door-woman', entity: null, by: 'writer' }],
     })

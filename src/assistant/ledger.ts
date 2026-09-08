@@ -29,12 +29,39 @@ export interface Development {
   quote: string
 }
 
+export type DefineKind = 'character' | 'place' | 'lore' | 'scene' | 'note' | 'variable'
+
+/**
+ * An editor's note on the page: one sentence, quoted, of a kind,
+ * sometimes with a fix the app can apply. A `define` note is the one
+ * that catches what does not exist yet: anything the read judges the
+ * story should hold as a first-class thing — a page, a scene, a note,
+ * a variable — named as written, with the kind it should be.
+ */
+export interface EditorNote {
+  kind: 'continuity' | 'loose-end' | 'define' | 'other'
+  message: string
+  quote: string
+  /** The thing it concerns, when it concerns one the story already has. */
+  entity?: TargetKey
+  /** For a define note: the thing as written on the page. */
+  name?: string
+  /** For a define note: what it should be. */
+  defineAs?: DefineKind
+  /** For a define note proposing a variable: its shape. */
+  variable?: { id: string; type: 'boolean' | 'number' | 'enum'; initial: string; description: string }
+  /** An effect the page performs that the engine does not, as an expression. */
+  effect?: string
+}
+
 export interface LedgerEntry {
   hash: string
   readAt: number
   mentions: LedgerMention[]
   rejected: LedgerRejection[]
   developments: Development[]
+  /** Absent on entries from before the editor's notes existed. */
+  notes?: EditorNote[]
 }
 
 /** Per item, keyed like a target: `scene:cold-city`, `note:timeline`. */
@@ -91,6 +118,12 @@ export function memoryLedgerStore(): LedgerStore {
   }
 }
 
+/** What a read said the story should define and has not, as written — drawn in orange until it exists or the writer says it is nothing. */
+export function modelUnknowns(entry: LedgerEntry | undefined): string[] {
+  if (!entry?.notes) return []
+  return entry.notes.filter((n) => n.kind === 'define' && !n.entity && n.name).map((n) => n.name as string)
+}
+
 /** What the read decided about phrases in the item, as verdicts the matcher draws: mentions resolved, candidates refused. */
 export function modelVerdicts(entry: LedgerEntry | undefined): Verdict[] {
   if (!entry) return []
@@ -108,6 +141,9 @@ export function readSummary(entry: LedgerEntry | undefined, now: number = Date.n
     ago < 60_000 ? 'just now' : ago < 3_600_000 ? `${Math.round(ago / 60_000)} min ago` : ago < 86_400_000 ? `${Math.round(ago / 3_600_000)} h ago` : `${Math.round(ago / 86_400_000)} d ago`
   const parts: string[] = []
   const n = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`
+  if (entry.notes?.length) parts.push(n(entry.notes.length, 'editor’s note', 'editor’s notes'))
+  const missing = entry.notes?.filter((note) => note.kind === 'define' && !note.entity).length ?? 0
+  if (missing) parts.push(n(missing, 'thing to define', 'things to define'))
   if (entry.developments.length) parts.push(n(entry.developments.length, 'development', 'developments'))
   if (entry.mentions.length) parts.push(n(entry.mentions.length, 'phrase resolved', 'phrases resolved'))
   if (entry.rejected.length) parts.push(n(entry.rejected.length, 'name refused', 'names refused'))

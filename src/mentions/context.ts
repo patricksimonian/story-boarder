@@ -16,6 +16,10 @@ export interface MentionContext {
   onVerdict: (quote: string, entity: TargetKey | null) => void
   /** A story-folder image as something an <img> can show, or null when it cannot be read. */
   imageUrl?: (path: string) => Promise<string | null>
+  /** Makes the thing an orange name asks for — a page, a scene, a note — with that name. */
+  onCreate?: (kind: 'character' | 'place' | 'lore' | 'scene' | 'note', title: string) => void
+  /** What the read thought an orange name should be, when it said. */
+  suggestedKind?: (quote: string) => string | undefined
 }
 
 export interface MentionCard {

@@ -1,5 +1,6 @@
 import type { Slug, Story, TargetKey } from '../domain/types'
-import { developmentLog, type Ledger } from '../assistant/ledger'
+import { developmentLog, storyOrder, type Ledger } from '../assistant/ledger'
+import { targetKey } from '../mentions/verdicts'
 import type { View } from '../state/view'
 
 /**
@@ -46,6 +47,9 @@ export function CoachView({
 }) {
   const ready = coachingOn
   const log = developmentLog(ledger, story, titleOf)
+  const noted = storyOrder(story)
+    .map((item) => ({ item, notes: ledger[targetKey(item)]?.notes ?? [] }))
+    .filter((row) => row.notes.length > 0)
 
   return (
     <section className="hist-wrap" role="region" aria-label="Coach">
@@ -61,6 +65,41 @@ export function CoachView({
           </button>
         </p>
       )}
+      <div className="coach-section">
+        <h3>Editor’s notes</h3>
+        <p className="view-note">
+          What the reads flagged, page by page: a scene against the world and the scenes before it, loose ends, state the engine should track,
+          people the scene or the library does not know. Each note is on its page with the fix it offers.
+        </p>
+        {noted.length === 0 ? (
+          <p className="hist-empty">No notes yet.</p>
+        ) : (
+          <div className="coach-log">
+            {noted.map(({ item, notes }) => (
+              <div key={targetKey(item)} className="coach-entity">
+                <h4>
+                  {item.title}{' '}
+                  {item.kind === 'scene' && (
+                    <button type="button" className="goto" aria-label={`Open scene ${item.title}`} onClick={() => onOpenScene(item.id)}>
+                      ↗
+                    </button>
+                  )}
+                </h4>
+                <ul>
+                  {notes.map((note, i) => (
+                    <li key={i}>
+                      <span className="coach-kind">{note.kind}</span>{' '}
+                      <span className="coach-fact" title={note.quote}>
+                        {note.message}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
       <div className="coach-section">
         <h3>Developments</h3>
         <p className="view-note">

@@ -19,8 +19,12 @@ export interface Target {
   title: string
 }
 
-/** How sure the span is: a title or alias as written, a near miss, or a phrase the model resolved. */
-export type Certainty = 'certain' | 'probable' | 'model'
+/**
+ * How sure the span is: a title or alias as written, a near miss, a
+ * phrase the model resolved — or `unknown`: a name the story has no page
+ * for, drawn so the writer can make one or say it is nothing.
+ */
+export type Certainty = 'certain' | 'probable' | 'model' | 'unknown'
 
 export interface Span {
   from: number
@@ -142,6 +146,8 @@ export interface FindOptions {
   self?: TargetKey
   /** Decisions about phrases in this item, the writer's and the model's. */
   verdicts?: Verdict[]
+  /** Things a read said the story should define and has not, as written on the page; drawn as unknown wherever they appear. */
+  unknowns?: string[]
 }
 
 export function findMentions(text: string, dict: Dictionary, opts: FindOptions = {}): Span[] {
@@ -213,6 +219,21 @@ export function findMentions(text: string, dict: Dictionary, opts: FindOptions =
     if (targets.length) spans.push({ from: token.start, to: token.end, quote: token.text, targets, certainty: 'probable' })
   }
 
+  // The unknown pass: the things a read said the story should hold and
+  // does not yet — a page, a scene, a note, a variable — wherever their
+  // names appear. Drawn in orange until they exist or the writer says
+  // they are nothing. Nothing here guesses; the read decides.
+  const taken = (from: number, to: number) => spans.some((s) => s.from < to && s.to > from)
+  for (const phrase of opts.unknowns ?? []) {
+    const entry = entryFor(phrase, { kind: 'lore', id: '', title: phrase }, 'unknown', 0, false)
+    if (!entry || suppressed.has(phraseKey(phrase))) continue
+    for (let i = 0; i + entry.words.length <= tokens.length; i++) {
+      if (norm(tokens[i].text) !== norm(entry.words[0]) || !matchesAt(entry, tokens, i, text)) continue
+      const from = tokens[i].start
+      const to = tokens[i + entry.words.length - 1].end
+      if (!taken(from, to)) spans.push({ from, to, quote: text.slice(from, to), targets: [], certainty: 'unknown' })
+    }
+  }
   return spans.sort((a, b) => a.from - b.from)
 }
 
