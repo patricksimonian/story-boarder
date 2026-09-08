@@ -106,6 +106,11 @@ describe('the scene read', () => {
     expect(readCalls(runner)[0].stdin).toContain('# The item: scene "The Dry Cistern" (scene:the-dry-cistern)')
     expect(readCalls(runner)[0].stdin).toContain('"Mara" → character:mara')
 
+    // The scene says what the read found, right under the button.
+    const outcome = within(editor).getByRole('region', { name: 'Last read' })
+    expect(outcome).toHaveTextContent('Read just now: 1 development, 1 phrase resolved')
+    expect(outcome).toHaveTextContent('Mara Mara stops watching the door.')
+
     // Hovering the resolved phrase shows what this scene developed about her.
     await userEvent.hover(mentionsIn(editor)[1])
     const tip = await screen.findByRole('dialog', { name: /mention: the door-woman/i })

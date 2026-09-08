@@ -2750,3 +2750,27 @@ button.sb-pen:focus-visible {
   font-size: 12px;
   color: var(--muted);
 }
+
+/* ---------- what the last read found ---------- */
+.read-outcome {
+  margin: 4px 0 10px;
+  padding: 8px 10px;
+  border-left: 3px solid #cdbd8f;
+  background: var(--shade);
+  font-size: 13px;
+}
+.read-summary {
+  margin: 0;
+  color: var(--muted);
+}
+.read-developments {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.read-developments li {
+  margin: 2px 0;
+}
+.read-entity {
+  font-weight: 600;
+  margin-right: 4px;
+}

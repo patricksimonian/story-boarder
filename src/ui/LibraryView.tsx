@@ -4,6 +4,7 @@ import type { ReferenceEntity, ReferenceKind, Slug, Story, TargetKey } from '../
 import type { MentionContext } from '../mentions/context'
 import type { Target } from '../mentions/match'
 import { NamedIn } from './NamedIn'
+import { ReadOutcome, type ReadInfo } from './ReadOutcome'
 import { ChipsField } from './ChipsField'
 import { MoodBoard } from './MoodBoard'
 import { ProseEditor } from './ProseEditor'
@@ -39,6 +40,7 @@ export function LibraryView({
   reading = false,
   readProblem = null,
   onRead,
+  read = null,
 }: {
   story: Story
   files: FileAccess
@@ -63,6 +65,7 @@ export function LibraryView({
   readProblem?: string | null
   /** Sends this page to the read now: what its text names, and what it says. */
   onRead?: () => void
+  read?: ReadInfo | null
 }) {
   const [picked, setPicked] = useState<ReferenceKind>('character')
   const [naming, setNaming] = useState(false)
@@ -196,6 +199,7 @@ export function LibraryView({
                 )}
               </div>
             )}
+            <ReadOutcome read={read} />
             <ProseEditor
               key={`${selected.kind}/${selected.id}`}
               markdown={selected.body}

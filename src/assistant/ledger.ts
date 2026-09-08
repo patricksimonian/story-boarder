@@ -100,6 +100,20 @@ export function modelVerdicts(entry: LedgerEntry | undefined): Verdict[] {
   ]
 }
 
+/** One line for the page a read came from: when, and what it recorded, or that it recorded nothing. */
+export function readSummary(entry: LedgerEntry | undefined, now: number = Date.now()): string | null {
+  if (!entry) return null
+  const ago = now - entry.readAt
+  const when =
+    ago < 60_000 ? 'just now' : ago < 3_600_000 ? `${Math.round(ago / 60_000)} min ago` : ago < 86_400_000 ? `${Math.round(ago / 3_600_000)} h ago` : `${Math.round(ago / 86_400_000)} d ago`
+  const parts: string[] = []
+  const n = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`
+  if (entry.developments.length) parts.push(n(entry.developments.length, 'development', 'developments'))
+  if (entry.mentions.length) parts.push(n(entry.mentions.length, 'phrase resolved', 'phrases resolved'))
+  if (entry.rejected.length) parts.push(n(entry.rejected.length, 'name refused', 'names refused'))
+  return `Read ${when}: ${parts.length ? parts.join(', ') : 'nothing to record'}`
+}
+
 export interface DevelopmentSite {
   item: Target
   fact: string

@@ -5,6 +5,7 @@ import { insertBeat, moveBeat, removeBeat, setBeat } from '../editor/beats'
 import type { MentionContext } from '../mentions/context'
 import type { Target } from '../mentions/match'
 import { NamedIn } from './NamedIn'
+import { ReadOutcome, type ReadInfo } from './ReadOutcome'
 import type { Placement } from '../story/mutations'
 import { EngineEditor } from './EngineEditor'
 import { MoodBoard } from './MoodBoard'
@@ -37,6 +38,7 @@ export function SceneEditor({
   reading = false,
   readProblem = null,
   onRead,
+  read = null,
 }: {
   story: Story
   scene: Scene
@@ -66,6 +68,8 @@ export function SceneEditor({
   readProblem?: string | null
   /** Sends this scene to the read now, whether or not it changed. */
   onRead?: () => void
+  /** What the last read of this scene found. */
+  read?: ReadInfo | null
 }) {
   const { manifest } = story
   const act = manifest.acts.find((a) => a.id === scene.act)
@@ -270,6 +274,7 @@ export function SceneEditor({
           </div>
           <div className="ed-section">
             <label>Prose</label>
+            <ReadOutcome read={read} />
             <ProseEditor
               key={`${scene.id}:${revision}`}
               markdown={scene.prose}

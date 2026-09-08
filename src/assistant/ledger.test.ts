@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import { loadStory } from '../story/loadStory'
 import { embersFiles } from '../test/embers'
-import { aliasProposals, developmentLines, developmentLog, developmentsFor, hashText, localLedgerStore, modelVerdicts, storyOrder, type Ledger, type LedgerEntry } from './ledger'
+import { aliasProposals, developmentLines, developmentLog, developmentsFor, hashText, localLedgerStore, modelVerdicts, readSummary, storyOrder, type Ledger, type LedgerEntry } from './ledger'
 
 async function story() {
   const files = embersFiles()
@@ -36,6 +36,23 @@ describe('the ledger', () => {
     })
     expect(refused.load('Embers')).toEqual({})
     expect(() => refused.save('Embers', {})).not.toThrow()
+  })
+
+  test('the summary says when a read ran and what it recorded, or that it recorded nothing', () => {
+    const now = 10 * 60_000
+    expect(readSummary(undefined, now)).toBeNull()
+    expect(readSummary(entry({ readAt: now - 5_000 }), now)).toBe('Read just now: nothing to record')
+    expect(
+      readSummary(
+        entry({
+          readAt: now - 3 * 60_000,
+          developments: [{ entity: 'character:mara', fact: 'f', quote: 'q' }],
+          mentions: [{ quote: 'the smith', entity: 'character:rook' }, { quote: 'her sister', entity: 'character:mara' }],
+          rejected: [{ quote: 'Rook', candidate: 'character:rook', why: 'meta' }],
+        }),
+        now,
+      ),
+    ).toBe('Read 3 min ago: 1 development, 2 phrases resolved, 1 name refused')
   })
 
   test("the read's mentions and rejections are the model's verdicts", () => {

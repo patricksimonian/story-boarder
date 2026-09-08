@@ -3,6 +3,7 @@ import type { Note, Slug, Story, TargetKey } from '../domain/types'
 import type { MentionContext } from '../mentions/context'
 import type { Target } from '../mentions/match'
 import { NamedIn } from './NamedIn'
+import { ReadOutcome, type ReadInfo } from './ReadOutcome'
 import { ProseEditor } from './ProseEditor'
 
 /**
@@ -29,6 +30,7 @@ export function NotesView({
   reading = false,
   readProblem = null,
   onRead,
+  read = null,
 }: {
   story: Story
   /** The open note as the draft holds it, or null when none is open. */
@@ -45,6 +47,7 @@ export function NotesView({
   reading?: boolean
   readProblem?: string | null
   onRead?: () => void
+  read?: ReadInfo | null
 }) {
   const [picked, setPicked] = useState<string | null>(null)
   const [naming, setNaming] = useState<'note' | 'section' | null>(null)
@@ -209,6 +212,7 @@ export function NotesView({
                 )}
               </div>
             )}
+            <ReadOutcome read={read} />
             <ProseEditor
               key={selected.id}
               markdown={selected.body}

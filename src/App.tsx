@@ -14,7 +14,7 @@ import { exportPlayable, type ExportResult } from './interchange/export'
 import { importToFiles } from './interchange/import'
 import { applySuggestion, type LiftSuggestion } from './interchange/lift'
 import runtimeJs from './player/runtime.generated.js?raw'
-import { aliasProposals, developmentLines, developmentsFor, hashText, localLedgerStore, modelVerdicts, storyOrder, type Ledger, type LedgerStore } from './assistant/ledger'
+import { aliasProposals, developmentLines, developmentsFor, hashText, localLedgerStore, modelVerdicts, readSummary, storyOrder, type Ledger, type LedgerStore } from './assistant/ledger'
 import { continuityRequest, findingsFrom, type ContinuityFinding, type ContinuityOutput } from './assistant/continuity'
 import { checkHealth, type Health } from './assistant/health'
 import { ledgerEntryFrom, readSceneRequest, type ReadSceneOutput } from './assistant/readScene'
@@ -80,6 +80,7 @@ import { RawEditor } from './ui/RawEditor'
 import { SceneEditor } from './ui/SceneEditor'
 import { SearchView } from './ui/SearchView'
 import { SettingsView } from './ui/SettingsView'
+import type { ReadInfo } from './ui/ReadOutcome'
 import { SimulateView } from './ui/SimulateView'
 import { StatsView } from './ui/StatsView'
 import { Sidebar } from './ui/Sidebar'
@@ -682,6 +683,18 @@ export default function App({
           return null
         }
       },
+    }
+  }
+
+  /** What the last read of an item found, for the page it was pressed on. */
+  function readInfo(item: TargetKey | null): ReadInfo | null {
+    if (!item) return null
+    const entry = ledger[item]
+    const summary = readSummary(entry)
+    if (!entry || !summary) return null
+    return {
+      summary,
+      developments: entry.developments.map((d) => ({ title: dict?.targets.get(d.entity)?.title ?? d.entity, fact: d.fact, quote: d.quote })),
     }
   }
 
@@ -1549,6 +1562,7 @@ export default function App({
             canRead={coachingOn}
             reading={noteItem !== null && reading.has(noteItem)}
             readProblem={readProblem}
+            read={readInfo(noteItem)}
             onRead={() => {
               if (noteItem) void readItem(noteItem, { force: true })
             }}
@@ -1600,6 +1614,7 @@ export default function App({
             canRead={coachingOn}
             reading={refItem !== null && reading.has(refItem)}
             readProblem={readProblem}
+            read={readInfo(refItem)}
             onRead={() => {
               if (refItem) void readItem(refItem, { force: true })
             }}
@@ -1657,6 +1672,7 @@ export default function App({
           canRead={coachingOn}
           reading={sceneItem !== null && reading.has(sceneItem)}
           readProblem={readProblem}
+          read={readInfo(sceneItem)}
           onRead={() => {
             if (sceneItem) void readItem(sceneItem, { force: true })
           }}
