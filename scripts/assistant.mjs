@@ -50,6 +50,10 @@ export function spawnClaude(argv, stdin, { signal } = {}) {
     }
     const child = spawn(found.command, [...found.prefix, ...argv], {
       cwd: tmpdir(),
+      // Claude Code thinks before it answers unless told not to; for a
+      // one-shot read that was forty seconds and thousands of tokens
+      // spent before the first word, for no better answer.
+      env: { ...process.env, MAX_THINKING_TOKENS: '0' },
       windowsHide: true,
       shell: found.prefix.length === 0 && /\.(cmd|bat)$/i.test(found.command),
       stdio: ['pipe', 'pipe', 'pipe'],

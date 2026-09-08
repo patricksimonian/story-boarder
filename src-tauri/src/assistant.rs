@@ -122,6 +122,10 @@ fn hide_window(_command: &mut Command) {}
 pub fn spawn(binary: &Path, argv: &[String], stdin_text: &str, cwd: &Path, runs: &Runs, run_id: &str) -> Result<ProcessResult, String> {
     let mut command = command_for(binary);
     command.args(argv).current_dir(cwd).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    // Claude Code thinks before it answers unless told not to; for a
+    // one-shot read that was forty seconds and thousands of tokens spent
+    // before the first word, for no better answer.
+    command.env("MAX_THINKING_TOKENS", "0");
     hide_window(&mut command);
     let mut child = command
         .spawn()
