@@ -51,9 +51,11 @@ jobs:
       - name: The tag must match package.json
         shell: bash
         run: |
+          # A tag is the version with or without a leading v: v0.1.0 and 0.1.0 both name 0.1.0.
           version=$(node -p "require('./package.json').version")
-          if [ "$RELEASE_TAG" != "v$version" ]; then
-            echo "Tag $RELEASE_TAG does not match package.json version $version — bump package.json (pnpm version <x.y.z>) and tag again."
+          tagged="${RELEASE_TAG#v}"
+          if [ "$tagged" != "$version" ]; then
+            echo "Tag $RELEASE_TAG names version $tagged, but package.json says $version — bump package.json (pnpm version <x.y.z>) and tag again."
             exit 1
           fi
 

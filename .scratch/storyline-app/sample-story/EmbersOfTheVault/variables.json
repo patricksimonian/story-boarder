@@ -1,0 +1,9 @@
+{
+  "variables": [
+    { "id": "trust", "type": "number", "initial": 0 },
+    { "id": "rebellion_strength", "type": "number", "initial": 0 },
+    { "id": "mara_alive", "type": "boolean", "initial": true },
+    { "id": "visited_undercity", "type": "boolean", "initial": false },
+    { "id": "a4_hearths_lit", "type": "number", "initial": 0 }
+  ]
+}

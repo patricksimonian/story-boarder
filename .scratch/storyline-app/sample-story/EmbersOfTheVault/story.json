@@ -1,0 +1,47 @@
+{
+  "title": "Embers of the Vault",
+  "acts": [
+    { "id": "act-1", "title": "Act I — The Spark" },
+    { "id": "act-2", "title": "Act II — The Descent" },
+    { "id": "act-3", "title": "Act III — The Reckoning" },
+    { "id": "act-4", "title": "Act IV — The Ember Road" }
+  ],
+  "storylines": [
+    {
+      "id": "heist",
+      "name": "The Heist",
+      "color": "#5b6ee1",
+      "glyph": "◆",
+      "scenes": ["cold-open-market", "the-job-offer", "vault-schematics", "the-vault-door", "embers"]
+    },
+    {
+      "id": "mara",
+      "name": "Mara's Trust",
+      "color": "#d5548e",
+      "glyph": "●",
+      "scenes": ["the-job-offer", "maras-confession", "maras-fate"]
+    },
+    {
+      "id": "rebellion",
+      "name": "The Rebellion",
+      "color": "#2fa08d",
+      "glyph": "▲",
+      "scenes": ["pamphlets-in-the-underhive", "the-safehouse-raid", "the-uprising", "embers"]
+    },
+    {
+      "id": "kindling",
+      "name": "Kindling",
+      "color": "#d78a3d",
+      "glyph": "✦",
+      "scenes": ["tanners-row", "the-orphan-mill", "the-city-gate", "the-warm-welcome", "the-road-north"]
+    },
+    {
+      "id": "the-thaw",
+      "name": "The Thaw",
+      "color": "#6aa7c9",
+      "glyph": "◐",
+      "scenes": ["cold-city", "smoke-over-lowmarket"]
+    }
+  ],
+  "settings": {}
+}

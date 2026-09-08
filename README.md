@@ -49,7 +49,7 @@ The page inside the window is the same app as the browser build, and it fails th
 
 `pnpm desktop:smoke <story folder>` drives a real build end to end — opens a copy of the folder, waits for the opening commit, exports the playable HTML, commits a checkpoint — and fails on any console error the page raised along the way. It works on a copy under the temp directory and never touches the folder you name. `--debug` runs the debug build against `pnpm dev` instead. The Rust side has its own tests (`pnpm test:rust`), which drive every command through the real IPC path with no window.
 
-Version: `package.json` is the only place it lives (Tauri reads it from there; the page shows it). Bump with `pnpm version x.y.z`, then tag `vx.y.z` — the workflow refuses a tag that disagrees.
+Version: `package.json` is the only place it lives (Tauri reads it from there; the page shows it). Bump with `pnpm version x.y.z`, then tag `vx.y.z` (or `x.y.z`; the workflow accepts either) — the workflow refuses a tag that names another version.
 
 Release: publish a GitHub release and `.github/workflows/release.yml` builds and attaches the installer, signed through SignPath once the `SIGNPATH_*` repository variables and `SIGNPATH_API_TOKEN` secret exist. Run the workflow by hand with a tag to attach a build to an existing release.
 
