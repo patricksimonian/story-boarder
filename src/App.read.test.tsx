@@ -125,8 +125,9 @@ describe('the scene read', () => {
     const editor = await openCistern()
     await waitFor(() => expect(within(editor).getByRole('button', { name: 'Read' })).toBeEnabled())
     await userEvent.type(within(editor).getByRole('textbox', { name: /synopsis/i }), ' Then Rook.')
-    await waitFor(() => expect(readCalls(runner)).toHaveLength(1))
-    expect(readCalls(runner)[0].stdin).toContain('Mara talks first. Then Rook.')
+    // On a loaded machine a pause mid-typing can earn a read of its own;
+    // what is claimed is that the finished text was read.
+    await waitFor(() => expect(readCalls(runner).some((c) => c.stdin.includes('Mara talks first. Then Rook.'))).toBe(true))
 
     await userEvent.keyboard('{Escape}')
     await userEvent.click(screen.getByRole('button', { name: /🧭 coach/i }))

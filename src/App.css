@@ -2516,3 +2516,25 @@ button.sb-pen:focus-visible {
 .ghost-chip button:hover {
   color: var(--ink);
 }
+.coach-lanes {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.coach-lanes li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+.an-dismiss {
+  margin-left: 8px;
+  padding: 0 6px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.an-dismiss:hover {
+  color: var(--ink);
+}

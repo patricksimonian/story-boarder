@@ -15,6 +15,7 @@ import { importToFiles } from './interchange/import'
 import { applySuggestion, type LiftSuggestion } from './interchange/lift'
 import runtimeJs from './player/runtime.generated.js?raw'
 import { aliasProposals, developmentLines, hashText, localLedgerStore, modelVerdicts, storyOrder, type Ledger, type LedgerStore } from './assistant/ledger'
+import { continuityRequest, findingsFrom, type ContinuityFinding, type ContinuityOutput } from './assistant/continuity'
 import { ledgerEntryFrom, readSceneRequest, type ReadSceneOutput } from './assistant/readScene'
 import { run } from './assistant/runner'
 import type { MentionContext } from './mentions/context'
@@ -239,6 +240,11 @@ export default function App({
   const readAllAbort = useRef<AbortController | null>(null)
   const readTimer = useRef<number | undefined>(undefined)
   const [dismissedAliases, setDismissedAliases] = useState<Set<string>>(new Set())
+  // Continuity findings are pending state like every suggestion: kept
+  // until dismissed or the story is left, never written anywhere.
+  const [continuity, setContinuity] = useState<ContinuityFinding[]>([])
+  const [checking, setChecking] = useState<{ storyline: Slug; done: number; total: number } | null>(null)
+  const checkAbort = useRef<AbortController | null>(null)
   useEffect(() => {
     if (!runner) return
     let live = true
@@ -745,6 +751,41 @@ export default function App({
     setReadingAll(null)
   }
 
+  /**
+   * The continuity check for one storyline: the ledger in lane order goes
+   * to the large tier, and what comes back replaces that lane's findings.
+   */
+  async function checkStoryline(id: Slug, signal?: AbortSignal): Promise<void> {
+    const current = loadedRef.current
+    if (!runner || !current) return
+    const request = continuityRequest(current.story, id, ledgerRef.current)
+    if (!request) return
+    try {
+      const result = await run<ContinuityOutput>(runner, request, { signal })
+      const found = findingsFrom(result.output, current.story, id)
+      setContinuity((list) => [...list.filter((f) => f.storyline !== id), ...found])
+      setReadProblem(null)
+    } catch (error) {
+      setReadProblem((error as Error).message)
+    }
+  }
+
+  /** Every storyline in order, one call each; Cancel stops after the current one. */
+  async function checkEverything(only?: Slug): Promise<void> {
+    const current = loadedRef.current
+    if (!current || !runner) return
+    const lanes = current.story.manifest.storylines.filter((s) => only === undefined || s.id === only)
+    const controller = new AbortController()
+    checkAbort.current = controller
+    for (let i = 0; i < lanes.length; i++) {
+      if (controller.signal.aborted) break
+      setChecking({ storyline: lanes[i].id, done: i, total: lanes.length })
+      await checkStoryline(lanes[i].id, controller.signal)
+    }
+    checkAbort.current = null
+    setChecking(null)
+  }
+
   /** The alias proposals for a library page, less the ones the writer waved away this session. */
   function proposalsFor(entity: ReferenceEntity): string[] {
     const key = targetKey(entity)
@@ -998,7 +1039,9 @@ export default function App({
     setConflict(null)
     clearTimeout(readTimer.current)
     readAllAbort.current?.abort()
+    checkAbort.current?.abort()
     setLedger({})
+    setContinuity([])
     setReadProblem(null)
     queuedConflicts.current = []
     setCreating(null)
@@ -1342,7 +1385,7 @@ export default function App({
         variableCount={story.registry.variables.length}
         noteCount={story.notes.size}
         referenceCount={story.references.size}
-        findingCount={findings.length}
+        findingCount={findings.length + continuity.length}
       >
         <div className="sb-sect">New</div>
         <button className="sb-item" onClick={() => setCreating('scene')}>
@@ -1397,6 +1440,12 @@ export default function App({
             onCancelReadAll={() => readAllAbort.current?.abort()}
             readingAll={readingAll}
             readProblem={readProblem}
+            continuityCount={continuity.length}
+            onCheck={(id) => void checkEverything(id)}
+            onCheckAll={() => void checkEverything()}
+            onCancelCheck={() => checkAbort.current?.abort()}
+            checking={checking}
+            onView={setView}
           />
         )}
         {view.level === 'variables' && (
@@ -1414,7 +1463,15 @@ export default function App({
             onDeletePlaythrough={(name) => void writeEngine(() => deletePlaythrough(folder.files, name))}
           />
         )}
-        {view.level === 'analysis' && <AnalysisView story={story} findings={findings} onOpenScene={onOpenScene} />}
+        {view.level === 'analysis' && (
+          <AnalysisView
+            story={story}
+            findings={findings}
+            continuity={continuity}
+            onDismissContinuity={(id) => setContinuity((list) => list.filter((f) => f.id !== id))}
+            onOpenScene={onOpenScene}
+          />
+        )}
         {view.level === 'history' && git && <HistoryView git={git} />}
         {view.level === 'notes' && (
           <NotesView

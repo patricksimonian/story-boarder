@@ -3,6 +3,7 @@ import type { ProcessRunner, RunnerStatus } from '../adapters/types'
 import type { Slug, Story, TargetKey } from '../domain/types'
 import { developmentLog, type Ledger } from '../assistant/ledger'
 import { pingRequest, run } from '../assistant/runner'
+import type { View } from '../state/view'
 
 /**
  * The coach: where the model-backed work reports. The Model section says
@@ -21,6 +22,12 @@ export function CoachView({
   onCancelReadAll = () => {},
   readingAll = null,
   readProblem = null,
+  continuityCount = 0,
+  onCheck = () => {},
+  onCheckAll = () => {},
+  onCancelCheck = () => {},
+  checking = null,
+  onView = () => {},
 }: {
   story: Story
   runner?: ProcessRunner
@@ -31,6 +38,13 @@ export function CoachView({
   onCancelReadAll?: () => void
   readingAll?: { done: number; total: number } | null
   readProblem?: string | null
+  /** How many continuity findings stand in the Analysis view. */
+  continuityCount?: number
+  onCheck?: (storyline: Slug) => void
+  onCheckAll?: () => void
+  onCancelCheck?: () => void
+  checking?: { storyline: Slug; done: number; total: number } | null
+  onView?: (view: View) => void
 }) {
   const [status, setStatus] = useState<RunnerStatus | null>(null)
   const [ping, setPing] = useState<{ kind: 'idle' } | { kind: 'running' } | { kind: 'ok'; echo: string } | { kind: 'failed'; reason: string }>({ kind: 'idle' })
@@ -139,6 +153,41 @@ export function CoachView({
             ))}
           </div>
         )}
+      </div>
+      <div className="coach-section">
+        <h3>Continuity</h3>
+        <p className="view-note">
+          A check walks one storyline through what its scenes developed, with the variable state the engine holds at each, and reports what
+          cannot all be true. Findings land in Analysis. Read the scenes first; a check only sees what was read.
+        </p>
+        <div className="create-actions">
+          <button type="button" disabled={!ready || checking !== null || story.manifest.storylines.length === 0} onClick={onCheckAll}>
+            {checking ? `Checking ${checking.done + 1} of ${checking.total}…` : 'Check the whole story'}
+          </button>
+          {checking && (
+            <button type="button" onClick={onCancelCheck}>
+              Cancel
+            </button>
+          )}
+          {continuityCount > 0 && (
+            <button type="button" className="goto" onClick={() => onView({ level: 'analysis' })}>
+              {continuityCount} {continuityCount === 1 ? 'finding' : 'findings'} in Analysis ↗
+            </button>
+          )}
+        </div>
+        <ul className="coach-lanes">
+          {story.manifest.storylines.map((lane) => (
+            <li key={lane.id}>
+              <span className="glyph" style={{ color: lane.color }}>
+                {lane.glyph}
+              </span>{' '}
+              {lane.name}
+              <button type="button" className="goto" disabled={!ready || checking !== null} aria-label={`Check ${lane.name}`} onClick={() => onCheck(lane.id)}>
+                {checking?.storyline === lane.id ? 'Checking…' : 'Check'}
+              </button>
+            </li>
+          ))}
+        </ul>
       </div>
     </section>
   )

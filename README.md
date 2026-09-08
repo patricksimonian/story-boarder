@@ -55,12 +55,10 @@ Release: publish a GitHub release and `.github/workflows/release.yml` builds and
 
 ## To activate coaching
 
-The coach and the scene reads run through the Claude Code you have installed and signed into. Install Claude Code and sign in. On the desktop, that is all. In a browser, run `pnpm assistant` at the project and leave it running; the Coach view says when it can see it.
+The coach runs through the Claude Code you have installed and signed into. Install Claude Code and sign in. On the desktop, that is all. In a browser, run `pnpm assistant` at the project and leave it running; the Coach view says when it can see it.
+
+With it on, prose that names a character, place, lore page, note, scene, or variable lights up in every editor; hover a name for its page and where else it is named, or to rule on what a phrase means. A scene read follows each save (or the Read button) and records what the scene says about who is in it and what changes; the Coach view keeps that log, and a continuity check walks a storyline through it and reports what cannot all be true, in Analysis. The mention pipeline works without Claude Code; the reads and checks need it.
 
 ## To Dos
 
-- syntax highlighting in prose for cross referencing prose to notes/library/variables etc 
-    - A workflow processes prose and matches with known themes/titles in library/notes/scenes
-    - an ai workflow (like haiku) if predicts whether a token best matches a character, a lore item, a place for example
-    - a user can hover and click, a tool tip opens up with context on the connection and allows the user to navigate to the context. 
-- on the dynamic coaching, is not only variable prediction/settings/guidance within a scene, also continouty checking, and a logging of developments such as events, character changes, etc. This allows the user to make sure their story is consistent without loopholes, errors in contionuty, or contradictions.
+- on the dynamic coaching, variable prediction/settings/guidance within a scene (the model coach of issue 11); continuity checking and the development log landed with the mention pipeline.
