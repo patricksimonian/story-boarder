@@ -6,6 +6,8 @@ import type {
   JournalEntry,
   OpenedFolder,
   Platform,
+  ProcessResult,
+  ProcessRunner,
 } from './types'
 
 /**
@@ -338,6 +340,50 @@ export function browserPlatform(): Platform {
     async rememberOpened(folder) {
       const handle = handles.get(folder)
       if (handle) await rememberFolder(folder.name, handle).catch(() => {})
+    },
+  }
+}
+
+export const HELPER_URL = 'http://127.0.0.1:7311'
+const HELPER_DOWN = 'The assistant helper is not running — in a terminal at the project, run pnpm assistant and leave it running.'
+
+/**
+ * A page cannot spawn anything, so the browser build asks the helper in
+ * scripts/assistant.mjs to. The helper spawns claude and nothing else.
+ */
+export function helperRunner(base: string = HELPER_URL, fetchFn: typeof fetch = (...args) => fetch(...args)): ProcessRunner {
+  let counter = 0
+  return {
+    async spawnClaude(argv, stdin, opts) {
+      const runId = `${Date.now()}-${++counter}`
+      const onAbort = () =>
+        void fetchFn(`${base}/cancel`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ runId }) }).catch(() => {})
+      opts?.signal?.addEventListener('abort', onAbort)
+      let response: Response
+      try {
+        response = await fetchFn(`${base}/spawn`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ argv, stdin, runId }),
+        })
+      } catch {
+        throw new Error(HELPER_DOWN)
+      } finally {
+        opts?.signal?.removeEventListener('abort', onAbort)
+      }
+      const body = (await response.json().catch(() => ({}))) as Partial<ProcessResult> & { error?: string }
+      if (!response.ok || typeof body.stdout !== 'string') throw new Error(body.error ?? `The assistant helper answered ${response.status}.`)
+      return { stdout: body.stdout, stderr: body.stderr ?? '', exitCode: body.exitCode ?? -1 }
+    },
+
+    async status() {
+      try {
+        const body = (await (await fetchFn(`${base}/status`)).json()) as { version?: string; error?: string }
+        if (body.version) return { kind: 'ready', detail: `Claude Code ${body.version}` }
+        return { kind: 'unavailable', reason: body.error ?? 'The assistant helper found no Claude Code.' }
+      } catch {
+        return { kind: 'unavailable', reason: HELPER_DOWN }
+      }
     },
   }
 }

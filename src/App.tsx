@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 // App.css is pulled in by index.css, inside Tailwind's components layer.
-import type { OpenedFolder, Platform } from './adapters/types'
+import type { OpenedFolder, Platform, ProcessRunner } from './adapters/types'
 import type { Note, Playthrough, ReferenceEntity, ReferenceKind, Scene, Slug, StoryManifest, TargetKey, VariableRegistry } from './domain/types'
 import { analyse } from './engine/analyse'
 import { parseNoteFile, serializeNoteFile } from './files/noteFile'
@@ -142,11 +142,14 @@ const referencePath = (kind: ReferenceKind, id: Slug) => `${referenceDir(kind)}/
 
 export default function App({
   platform,
+  runner,
   autosaveDelayMs = 1000,
   boundaryIdleMs = 180000,
   makeRemote = (spot: GitHubSpot) => gitHubRemote(spot),
 }: {
   platform: Platform
+  /** How the writer's own Claude Code gets spawned; absent where nothing can spawn it. */
+  runner?: ProcessRunner
   /** How long typing pauses before the disk follows. */
   autosaveDelayMs?: number
   /** How long the folder rests before an idle boundary commit. */
@@ -1268,7 +1271,7 @@ export default function App({
           <ActView story={story} actId={view.act} onView={setView} onOpenScene={onOpenScene} />
         )}
         {view.level === 'graph' && <GraphView story={story} onOpenScene={onOpenScene} />}
-        {view.level === 'coach' && <CoachView story={story} />}
+        {view.level === 'coach' && <CoachView story={story} runner={runner} />}
         {view.level === 'variables' && (
           <VariablesView
             story={story}

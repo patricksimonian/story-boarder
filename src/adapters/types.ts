@@ -119,3 +119,32 @@ export interface Platform {
    */
   onCloseRequested?(handler: () => Promise<void>): () => void
 }
+
+/**
+ * How the app reaches the writer's own Claude Code: by spawning it. What
+ * differs per platform is only how a process gets spawned — the desktop
+ * shell runs it, a browser tab asks a helper on localhost to — so that is
+ * all the seam carries. `src/assistant/` owns the argv and the parsing.
+ */
+export interface ProcessRunner {
+  /** Spawns `claude` with argv, writes stdin, resolves when it exits. */
+  spawnClaude(argv: string[], stdin: string, opts?: SpawnOptions): Promise<ProcessResult>
+  /** `claude --version`, or why it can't be run, for the Coach view. */
+  status(): Promise<RunnerStatus>
+}
+
+export interface SpawnOptions {
+  signal?: AbortSignal
+  /** The workflow's name — nothing to a real runner; the stub answers by it. */
+  workflow?: string
+}
+
+export interface ProcessResult {
+  stdout: string
+  stderr: string
+  exitCode: number
+}
+
+export type RunnerStatus =
+  | { kind: 'ready'; detail: string }
+  | { kind: 'unavailable'; reason: string }

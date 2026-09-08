@@ -126,3 +126,8 @@ The first three land without a runner and are useful on their own.
 ## Deliberately left to the build
 
 The exact edit-distance thresholds and stoplist size, iterated against the sample story; whether synopsis and beats get decorations too (they are plain fields today, and the read covers them regardless); how the tooltip behaves on touch; the ledger's on-disk format in app data; whether a rejection the model makes should be offered to the writer as a permanent verdict; cross-lane continuity (a character in two lanes in one act is not a contradiction in a game narrative, and what is needs thought); and the rubrics' precise wording.
+
+## Build notes
+
+Found while building, 2026-09-08, and binding on 15 as well. Claude Code 2.1.215 delivers a `--json-schema` answer through a tool of its own called StructuredOutput, so removing every tool with `--disallowedTools "*"` removes that one too: the first real ping spent five turns being refused it and came back with no `structured_output`. The runner passes `--tools StructuredOutput` instead, which leaves the model that tool and no other; the same ping then takes two turns and about a fifth of a cent. There is no `--max-turns` in this version, and with one tool there is nothing to bound. The npm install of Claude Code on Windows is a `claude.cmd` that runs `node_modules/@anthropic-ai/claude-code/bin/claude.exe`; both spawners run that exe directly (or the older `cli.js` through node) so no shell rereads the argv, which carries a JSON schema and a rubric. Verdict keys are `kind:id` for the item and the entity both.
+

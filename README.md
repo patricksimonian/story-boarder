@@ -53,6 +53,9 @@ Version: `package.json` is the only place it lives (Tauri reads it from there; t
 
 Release: publish a GitHub release and `.github/workflows/release.yml` builds and attaches the installer, signed through SignPath once the `SIGNPATH_*` repository variables and `SIGNPATH_API_TOKEN` secret exist. Run the workflow by hand with a tag to attach a build to an existing release.
 
+## To activate coaching
+
+The coach and the scene reads run through the Claude Code you have installed and signed into. Install Claude Code and sign in. On the desktop, that is all. In a browser, run `pnpm assistant` at the project and leave it running; the Coach view says when it can see it.
 
 ## To Dos
 

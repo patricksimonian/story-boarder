@@ -34,7 +34,7 @@ vi.mock('@tauri-apps/api/window', () => ({
   }),
 }))
 
-const { TauriFileAccess, TauriFolderWatcher, forwardErrorsToShell, tauriPlatform } = await import('./tauri')
+const { TauriFileAccess, TauriFolderWatcher, forwardErrorsToShell, tauriPlatform, tauriRunner } = await import('./tauri')
 
 beforeEach(() => {
   invoke.mockReset()
@@ -227,5 +227,33 @@ describe('forwardErrorsToShell', () => {
     invoke.mockClear()
     page.dispatchEvent(new ErrorEvent('error', { error: new Error('silent'), message: 'silent' }))
     expect(invoke).not.toHaveBeenCalled()
+  })
+})
+
+describe('tauriRunner', () => {
+  it('carries a run to the shell with an id, cancels by that id, and reads the status either way', async () => {
+    invoke.mockResolvedValueOnce({ stdout: '{}', stderr: '', exitCode: 0 })
+    const runner = tauriRunner()
+    const controller = new AbortController()
+    const result = await runner.spawnClaude(['-p'], 'briefing', { signal: controller.signal })
+    expect(result).toEqual({ stdout: '{}', stderr: '', exitCode: 0 })
+    const [command, args] = invoke.mock.calls[0] as [string, { runId: string; argv: string[]; stdin: string }]
+    expect(command).toBe('spawn_claude')
+    expect(args).toMatchObject({ argv: ['-p'], stdin: 'briefing' })
+    expect(typeof args.runId).toBe('string')
+
+    invoke.mockImplementationOnce(() => new Promise(() => {}))
+    invoke.mockResolvedValueOnce(undefined)
+    const abortable = new AbortController()
+    void runner.spawnClaude(['-p'], '', { signal: abortable.signal })
+    abortable.abort()
+    await Promise.resolve()
+    const cancel = invoke.mock.calls.find(([c]) => c === 'cancel_claude') as [string, { runId: string }] | undefined
+    expect(cancel?.[1].runId).toBe((invoke.mock.calls[1][1] as { runId: string }).runId)
+
+    invoke.mockResolvedValueOnce('Claude Code 2.1.215')
+    expect(await runner.status()).toEqual({ kind: 'ready', detail: 'Claude Code 2.1.215' })
+    invoke.mockRejectedValueOnce('Claude Code not found on PATH — install it and sign in, then restart the app.')
+    expect(await runner.status()).toEqual({ kind: 'unavailable', reason: 'Claude Code not found on PATH — install it and sign in, then restart the app.' })
   })
 })

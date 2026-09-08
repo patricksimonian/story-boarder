@@ -4,6 +4,7 @@
 //! touch a folder the user picked or reopened through this shell — a root
 //! the page names on its own is refused.
 
+mod assistant;
 mod folder;
 mod recents;
 mod watch;
@@ -226,12 +227,47 @@ fn log_error(message: String) {
     log::error!(target: "webview", "{message}");
 }
 
+/// Runs the writer's own Claude Code once, with the app's data directory
+/// as its working directory — never the story folder, so there is
+/// nothing for the model to read even if a tool slipped through.
+#[tauri::command]
+async fn spawn_claude<R: tauri::Runtime>(
+    app: AppHandle<R>,
+    runs: State<'_, assistant::Runs>,
+    claude: State<'_, assistant::ClaudePath>,
+    run_id: String,
+    argv: Vec<String>,
+    stdin: String,
+) -> Result<assistant::ProcessResult, String> {
+    let binary = claude.locate()?;
+    let cwd = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&cwd).map_err(|e| format!("Could not create {}: {e}", cwd.display()))?;
+    let runs = runs.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || assistant::spawn(&binary, &argv, &stdin, &cwd, &runs, &run_id))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn cancel_claude(runs: State<'_, assistant::Runs>, run_id: String) {
+    assistant::cancel(&runs, &run_id);
+}
+
+/// `Claude Code 2.1.215`, or why it can't be run.
+#[tauri::command]
+async fn claude_status(claude: State<'_, assistant::ClaudePath>) -> Result<String, String> {
+    let binary = claude.locate()?;
+    tauri::async_runtime::spawn_blocking(move || assistant::version(&binary)).await.map_err(|e| e.to_string())?
+}
+
 /// The state and commands, on whichever runtime: the real one in `run`,
 /// the mock one in the ipc tests below.
 fn configure<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Builder<R> {
     builder
         .manage(Roots::default())
         .manage(watch::Watchers::default())
+        .manage(assistant::Runs::default())
+        .manage(assistant::ClaudePath::default())
         .invoke_handler(tauri::generate_handler![
             pick_folder,
             recents,
@@ -250,6 +286,9 @@ fn configure<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Builder<R>
             watch_folder,
             unwatch_folder,
             log_error,
+            spawn_claude,
+            cancel_claude,
+            claude_status,
         ])
 }
 
@@ -416,6 +455,27 @@ mod ipc {
         );
         let escape = shell.call("read_text", shell.args(serde_json::json!({ "path": "../x" }))).unwrap_err();
         assert!(escape.starts_with("Refusing a path outside the story folder"), "{escape}");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn claude_is_spawned_with_the_page_side_argument_names_and_cancelled_by_id() {
+        let shell = Shell::open("claude");
+        let script = shell.dir.join("claude.cmd");
+        std::fs::write(
+            &script,
+            "@echo off\r\nif \"%1\"==\"--version\" goto v\r\nset /p line=\r\necho ran %1 %line%\r\nexit /b 0\r\n:v\r\necho 9.9.9 (Claude Code)\r\n",
+        )
+        .unwrap();
+        shell._app.state::<assistant::ClaudePath>().set(script);
+        assert_eq!(shell.call("claude_status", serde_json::json!({})).unwrap(), "Claude Code 9.9.9");
+        let result = shell
+            .call("spawn_claude", serde_json::json!({ "runId": "r1", "argv": ["-p"], "stdin": "hello\r\n" }))
+            .unwrap();
+        assert_eq!(result["exitCode"], 0);
+        assert_eq!(result["stdout"].as_str().unwrap().trim(), "ran -p hello");
+        // Cancelling a run that has already ended is nothing to report.
+        shell.call("cancel_claude", serde_json::json!({ "runId": "r1" })).unwrap();
     }
 
     #[test]

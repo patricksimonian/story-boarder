@@ -1,7 +1,6 @@
 import { EditorContent, useEditor } from '@tiptap/react'
 import { useEffect, useRef, useState } from 'react'
 import type { TargetKey } from '../domain/types'
-import { mentionsKey } from '../editor/mentions'
 import { proseExtensions, readProse } from '../editor/prose'
 import { KIND_LABEL, type MentionContext } from '../mentions/context'
 import type { Certainty } from '../mentions/match'
@@ -36,9 +35,7 @@ export function ProseEditor({
   // editor keeps its document and redraws over it.
   const find = mentions?.find ?? null
   useEffect(() => {
-    if (!editor) return
-    editor.storage.mentionHighlights.find = find
-    editor.view.dispatch(editor.state.tr.setMeta(mentionsKey, true))
+    editor?.commands.setMentionFinder(find)
   }, [editor, find])
 
   const wrap = useRef<HTMLDivElement | null>(null)

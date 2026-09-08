@@ -24,6 +24,12 @@ declare module '@tiptap/core' {
   interface Storage {
     mentionHighlights: MentionStorage
   }
+  interface Commands<ReturnType> {
+    mentionHighlights: {
+      /** Swaps the finder and redraws over the document as it stands. */
+      setMentionFinder: (find: MentionFinder | null) => ReturnType
+    }
+  }
 }
 
 export const mentionsKey = new PluginKey<DecorationSet>('mentions')
@@ -33,6 +39,18 @@ export const MentionHighlights = Extension.create<Record<string, never>, Mention
 
   addStorage() {
     return { find: null }
+  },
+
+  addCommands() {
+    return {
+      setMentionFinder:
+        (find) =>
+        ({ tr, dispatch }) => {
+          this.storage.find = find
+          if (dispatch) tr.setMeta(mentionsKey, true)
+          return true
+        },
+    }
   },
 
   addProseMirrorPlugins() {

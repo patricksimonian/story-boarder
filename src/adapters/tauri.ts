@@ -8,6 +8,8 @@ import type {
   FolderWatcher,
   OpenedFolder,
   Platform,
+  ProcessResult,
+  ProcessRunner,
 } from './types'
 
 /**
@@ -192,6 +194,35 @@ export function tauriPlatform(): Platform {
       return () => {
         stopped = true
         void unlisten.then((off) => off())
+      }
+    },
+  }
+}
+
+/**
+ * The desktop's way to Claude Code: the shell finds the binary the way
+ * `where` does, spawns it with the app's data directory as its working
+ * directory, and kills it on cancel.
+ */
+export function tauriRunner(): ProcessRunner {
+  let counter = 0
+  return {
+    async spawnClaude(argv, stdin, opts) {
+      const runId = `${Date.now()}-${++counter}`
+      const onAbort = () => void invoke('cancel_claude', { runId }).catch(() => {})
+      opts?.signal?.addEventListener('abort', onAbort)
+      try {
+        return await call<ProcessResult>('spawn_claude', { runId, argv, stdin })
+      } finally {
+        opts?.signal?.removeEventListener('abort', onAbort)
+      }
+    },
+
+    async status() {
+      try {
+        return { kind: 'ready', detail: await call<string>('claude_status') }
+      } catch (error) {
+        return { kind: 'unavailable', reason: (error as Error).message }
       }
     },
   }
