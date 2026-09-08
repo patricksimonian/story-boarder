@@ -16,8 +16,10 @@ import { applySuggestion, type LiftSuggestion } from './interchange/lift'
 import runtimeJs from './player/runtime.generated.js?raw'
 import { aliasProposals, developmentLines, hashText, localLedgerStore, modelVerdicts, storyOrder, type Ledger, type LedgerStore } from './assistant/ledger'
 import { continuityRequest, findingsFrom, type ContinuityFinding, type ContinuityOutput } from './assistant/continuity'
+import { checkHealth, type Health } from './assistant/health'
 import { ledgerEntryFrom, readSceneRequest, type ReadSceneOutput } from './assistant/readScene'
 import { run } from './assistant/runner'
+import { assistantSettings, DEFAULT_PROMPTS, loadPrompts, savePrompts, withAssistant, type AssistantSettings, type Prompts } from './assistant/settings'
 import type { MentionContext } from './mentions/context'
 import { describeTarget } from './mentions/describe'
 import { dictionary, findMentions, itemText, mentionIndex } from './mentions/match'
@@ -52,6 +54,7 @@ import {
   setSyncRemote,
   setWordGoal,
   updateStoryline,
+  writeManifest,
   type Placement,
 } from './story/mutations'
 import { EditActDialog, EditStorylineDialog, type Editing } from './ui/StructureDialogs'
@@ -75,6 +78,7 @@ import { ProblemsBar } from './ui/ProblemsBar'
 import { RawEditor } from './ui/RawEditor'
 import { SceneEditor } from './ui/SceneEditor'
 import { SearchView } from './ui/SearchView'
+import { SettingsView } from './ui/SettingsView'
 import { SimulateView } from './ui/SimulateView'
 import { StatsView } from './ui/StatsView'
 import { Sidebar } from './ui/Sidebar'
@@ -235,7 +239,21 @@ export default function App({
   loadedRef.current = loaded
   const [reading, setReading] = useState<Set<TargetKey>>(new Set())
   const [readProblem, setReadProblem] = useState<string | null>(null)
-  const [runnerReady, setRunnerReady] = useState(false)
+  // The coaching switch and the model live in story.json; the health
+  // check behind the switch is what this machine says right now, run
+  // when the switch goes on and at every open while it is on.
+  const assistant: AssistantSettings = useMemo(
+    () => (loaded ? assistantSettings(loaded.story.manifest) : { enabled: false, model: 'haiku' }),
+    [loaded],
+  )
+  const [health, setHealth] = useState<Health>({ kind: 'idle' })
+  const [prompts, setPromptsState] = useState<Prompts>(DEFAULT_PROMPTS)
+  const promptsRef = useRef<Prompts>(DEFAULT_PROMPTS)
+  const setPrompts = (next: Prompts) => {
+    promptsRef.current = next
+    setPromptsState(next)
+  }
+  const coachingOn = assistant.enabled && health.kind === 'passed'
   const [readingAll, setReadingAll] = useState<{ done: number; total: number } | null>(null)
   const readAllAbort = useRef<AbortController | null>(null)
   const readTimer = useRef<number | undefined>(undefined)
@@ -245,16 +263,6 @@ export default function App({
   const [continuity, setContinuity] = useState<ContinuityFinding[]>([])
   const [checking, setChecking] = useState<{ storyline: Slug; done: number; total: number } | null>(null)
   const checkAbort = useRef<AbortController | null>(null)
-  useEffect(() => {
-    if (!runner) return
-    let live = true
-    void runner.status().then((status) => {
-      if (live) setRunnerReady(status.kind === 'ready')
-    })
-    return () => {
-      live = false
-    }
-  }, [runner])
   useEffect(() => () => clearTimeout(readTimer.current), [])
   const findings = useMemo(() => (loaded ? analyse(loaded.story) : []), [loaded])
   // Everything the story names, and everywhere it is named: what the
@@ -705,11 +713,11 @@ export default function App({
     if (text === undefined) return false
     if (!opts.force && ledgerRef.current[item]?.hash === hashText(text)) return false
     const dictNow = dictionary(story)
-    const request = readSceneRequest(story, item, dictNow, ledgerRef.current)
+    const request = readSceneRequest(story, item, dictNow, ledgerRef.current, promptsRef.current.readScene)
     if (!request) return false
     setReading((set) => new Set(set).add(item))
     try {
-      const result = await run<ReadSceneOutput>(runner, request, { signal: opts.signal })
+      const result = await run<ReadSceneOutput>(runner, request, { model: assistantSettings(story.manifest).model, signal: opts.signal })
       const next = { ...ledgerRef.current, [item]: ledgerEntryFrom(result.output, text, dictNow) }
       setLedger(next)
       store.save(folder.name, next)
@@ -729,7 +737,7 @@ export default function App({
 
   /** A read follows a save once typing has rested; only the latest save's read survives. */
   function scheduleRead(item: TargetKey): void {
-    if (!runner || !runnerReady) return
+    if (!runner || !coachingOn) return
     clearTimeout(readTimer.current)
     readTimer.current = window.setTimeout(() => void readItem(item), readIdleMs)
   }
@@ -758,10 +766,10 @@ export default function App({
   async function checkStoryline(id: Slug, signal?: AbortSignal): Promise<void> {
     const current = loadedRef.current
     if (!runner || !current) return
-    const request = continuityRequest(current.story, id, ledgerRef.current)
+    const request = continuityRequest(current.story, id, ledgerRef.current, promptsRef.current.checkContinuity)
     if (!request) return
     try {
-      const result = await run<ContinuityOutput>(runner, request, { signal })
+      const result = await run<ContinuityOutput>(runner, request, { model: assistantSettings(current.story.manifest).model, signal })
       const found = findingsFrom(result.output, current.story, id)
       setContinuity((list) => [...list.filter((f) => f.storyline !== id), ...found])
       setReadProblem(null)
@@ -784,6 +792,36 @@ export default function App({
     }
     checkAbort.current = null
     setChecking(null)
+  }
+
+  /** The health check: Claude Code found, signed in, and answering through the chosen model. */
+  async function runHealth(model: string): Promise<void> {
+    setHealth({ kind: 'checking' })
+    const result = await checkHealth(runner, model, loadedRef.current?.story.manifest.title ?? '')
+    setHealth(result)
+  }
+
+  /** The Story pane's save: the title and the whole settings object, as edited. */
+  async function saveStorySettings(title: string, settings: StoryManifest['settings']): Promise<void> {
+    const current = loadedRef.current
+    if (!folder || !current) return
+    await writeManifest(folder.files, { ...current.story.manifest, title, settings })
+    await reload(folder)
+  }
+
+  /** The Claude pane's save: the switch and the model into story.json, the prompts into their files; then the check, if on. */
+  async function saveAssistant(next: AssistantSettings, nextPrompts: Prompts): Promise<void> {
+    const current = loadedRef.current
+    if (!folder || !current) return
+    await writeManifest(folder.files, withAssistant(current.story.manifest, next))
+    await savePrompts(folder.files, nextPrompts)
+    setPrompts(await loadPrompts(folder.files))
+    await reload(folder)
+    if (next.enabled) {
+      if (health.kind !== 'passed' || next.model !== assistant.model) await runHealth(next.model)
+    } else {
+      setHealth({ kind: 'idle' })
+    }
   }
 
   /** The alias proposals for a library page, less the ones the writer waved away this session. */
@@ -1003,7 +1041,11 @@ export default function App({
     setLoaded(result.loaded)
     setLedger(store.load(opened.name))
     setReadProblem(null)
+    setPrompts(await loadPrompts(opened.files))
     const { manifest, scenes } = result.loaded.story
+    const coaching = assistantSettings(manifest)
+    setHealth({ kind: 'idle' })
+    if (coaching.enabled) void runHealth(coaching.model)
     const initialView = readViewFromHash(location.hash, (id: Slug) => manifest.acts.some((a) => a.id === id))
     setViewState(initialView)
     const sceneId = readSceneFromHash(location.hash, (id) => scenes.has(id))
@@ -1043,6 +1085,8 @@ export default function App({
     setLedger({})
     setContinuity([])
     setReadProblem(null)
+    setHealth({ kind: 'idle' })
+    setPrompts(DEFAULT_PROMPTS)
     queuedConflicts.current = []
     setCreating(null)
     setEditing(null)
@@ -1432,7 +1476,8 @@ export default function App({
         {view.level === 'coach' && (
           <CoachView
             story={story}
-            runner={runner}
+            coachingOn={coachingOn}
+            onView={setView}
             ledger={ledger}
             titleOf={(key) => dict?.targets.get(key)?.title}
             onOpenScene={onOpenScene}
@@ -1445,7 +1490,6 @@ export default function App({
             onCheckAll={() => void checkEverything()}
             onCancelCheck={() => checkAbort.current?.abort()}
             checking={checking}
-            onView={setView}
           />
         )}
         {view.level === 'variables' && (
@@ -1483,7 +1527,7 @@ export default function App({
             onEdit={editNote}
             onDelete={() => void deleteNoteAction()}
             mentions={noteMentions}
-            canRead={!!runner && runnerReady}
+            canRead={coachingOn}
             reading={noteItem !== null && reading.has(noteItem)}
             readProblem={readProblem}
             onRead={() => {
@@ -1542,6 +1586,18 @@ export default function App({
             onSave={(spot) => void saveSync(spot)}
           />
         )}
+        {view.level === 'settings' && (
+          <SettingsView
+            manifest={story.manifest}
+            onSaveStory={(title, settings) => void saveStorySettings(title, settings)}
+            assistant={assistant}
+            prompts={prompts}
+            health={health}
+            onCheck={(model) => void runHealth(model)}
+            onSaveAssistant={(next, nextPrompts) => void saveAssistant(next, nextPrompts)}
+            runnerKind={runner?.kind ?? 'none'}
+          />
+        )}
       </main>
       {poolOpen && (
         <PoolDrawer
@@ -1569,7 +1625,7 @@ export default function App({
           onRestore={(text) => void restoreSceneVersion(text)}
           onAddImages={(picked) => void addImagesToScene(picked)}
           mentions={sceneMentions}
-          canRead={!!runner && runnerReady}
+          canRead={coachingOn}
           reading={sceneItem !== null && reading.has(sceneItem)}
           readProblem={readProblem}
           onRead={() => {

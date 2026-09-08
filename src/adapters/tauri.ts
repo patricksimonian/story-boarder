@@ -2,14 +2,15 @@ import { invoke, isTauri } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { IdbJournal } from './browser'
-import type {
-  FileAccess,
-  FolderChangeHandler,
-  FolderWatcher,
-  OpenedFolder,
-  Platform,
-  ProcessResult,
-  ProcessRunner,
+import {
+  readAuthJson,
+  type FileAccess,
+  type FolderChangeHandler,
+  type FolderWatcher,
+  type OpenedFolder,
+  type Platform,
+  type ProcessResult,
+  type ProcessRunner,
 } from './types'
 
 /**
@@ -207,6 +208,8 @@ export function tauriPlatform(): Platform {
 export function tauriRunner(): ProcessRunner {
   let counter = 0
   return {
+    kind: 'desktop',
+
     async spawnClaude(argv, stdin, opts) {
       const runId = `${Date.now()}-${++counter}`
       const onAbort = () => void invoke('cancel_claude', { runId }).catch(() => {})
@@ -223,6 +226,14 @@ export function tauriRunner(): ProcessRunner {
         return { kind: 'ready', detail: await call<string>('claude_status') }
       } catch (error) {
         return { kind: 'unavailable', reason: (error as Error).message }
+      }
+    },
+
+    async auth() {
+      try {
+        return readAuthJson(await call<string>('claude_auth'))
+      } catch (error) {
+        return { kind: 'unknown', reason: (error as Error).message }
       }
     },
   }

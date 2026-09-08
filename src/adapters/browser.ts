@@ -1,13 +1,14 @@
-import type {
-  FileAccess,
-  FolderChangeHandler,
-  FolderWatcher,
-  Journal,
-  JournalEntry,
-  OpenedFolder,
-  Platform,
-  ProcessResult,
-  ProcessRunner,
+import {
+  readAuthJson,
+  type FileAccess,
+  type FolderChangeHandler,
+  type FolderWatcher,
+  type Journal,
+  type JournalEntry,
+  type OpenedFolder,
+  type Platform,
+  type ProcessResult,
+  type ProcessRunner,
 } from './types'
 
 /**
@@ -354,6 +355,8 @@ const HELPER_DOWN = 'The assistant helper is not running — in a terminal at th
 export function helperRunner(base: string = HELPER_URL, fetchFn: typeof fetch = (...args) => fetch(...args)): ProcessRunner {
   let counter = 0
   return {
+    kind: 'browser',
+
     async spawnClaude(argv, stdin, opts) {
       const runId = `${Date.now()}-${++counter}`
       const onAbort = () =>
@@ -383,6 +386,16 @@ export function helperRunner(base: string = HELPER_URL, fetchFn: typeof fetch = 
         return { kind: 'unavailable', reason: body.error ?? 'The assistant helper found no Claude Code.' }
       } catch {
         return { kind: 'unavailable', reason: HELPER_DOWN }
+      }
+    },
+
+    async auth() {
+      try {
+        const body = (await (await fetchFn(`${base}/auth`)).json()) as { json?: string; error?: string }
+        if (typeof body.json === 'string') return readAuthJson(body.json)
+        return { kind: 'unknown', reason: body.error ?? 'the assistant helper could not ask' }
+      } catch {
+        return { kind: 'unknown', reason: HELPER_DOWN }
       }
     },
   }

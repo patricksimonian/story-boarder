@@ -9,11 +9,11 @@ import { claudeArgs, parseClaudeResult, RunnerFailure, type WorkflowRequest, typ
 export async function run<T>(
   runner: ProcessRunner,
   request: WorkflowRequest,
-  opts: { signal?: AbortSignal } = {},
+  opts: { model: string; signal?: AbortSignal },
 ): Promise<WorkflowResult<T>> {
   let result
   try {
-    result = await runner.spawnClaude(claudeArgs(request), request.briefing, { signal: opts.signal, workflow: request.workflow })
+    result = await runner.spawnClaude(claudeArgs(request, opts.model), request.briefing, { signal: opts.signal, workflow: request.workflow })
   } catch (error) {
     if (opts.signal?.aborted) throw new RunnerFailure('Cancelled.')
     throw new RunnerFailure((error as Error).message)
@@ -34,6 +34,5 @@ export function pingRequest(title: string): WorkflowRequest {
       required: ['echo'],
       additionalProperties: false,
     },
-    model: 'small',
   }
 }

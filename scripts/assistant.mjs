@@ -73,13 +73,21 @@ export function claudeVersion() {
   })
 }
 
+/** `claude auth status --json`, as printed. */
+export function claudeAuth() {
+  return spawnClaude(['auth', 'status', '--json'], '').then((r) => {
+    if (r.exitCode !== 0 || !r.stdout.trim()) throw new Error(r.stderr.trim() || 'claude auth status printed nothing')
+    return r.stdout.trim()
+  })
+}
+
 /** A one-shot print run and nothing else: anything interactive or bare is refused. */
 export function acceptableArgv(argv) {
   return Array.isArray(argv) && argv.every((a) => typeof a === 'string') && argv.includes('-p') && !argv.includes('--bare')
 }
 
 /** The server, not yet listening: tests hand in a fake spawn and a port of their own. */
-export function createAssistant({ spawn: spawnFn = spawnClaude, version = claudeVersion, origins = DEFAULT_ORIGINS } = {}) {
+export function createAssistant({ spawn: spawnFn = spawnClaude, version = claudeVersion, auth = claudeAuth, origins = DEFAULT_ORIGINS } = {}) {
   const runs = new Map()
   return createServer(async (req, res) => {
     const origin = req.headers.origin
@@ -101,6 +109,14 @@ export function createAssistant({ spawn: spawnFn = spawnClaude, version = claude
     if (req.method === 'GET' && req.url === '/status') {
       try {
         answer(200, { version: await version() })
+      } catch (error) {
+        answer(200, { error: error.message })
+      }
+      return
+    }
+    if (req.method === 'GET' && req.url === '/auth') {
+      try {
+        answer(200, { json: await auth() })
       } catch (error) {
         answer(200, { error: error.message })
       }

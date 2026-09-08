@@ -24,8 +24,6 @@ export interface WorkflowRequest {
   briefing: string
   /** The shape the answer must take. */
   schema: JsonSchema
-  /** A tier, never an alias. */
-  model: 'small' | 'large'
 }
 
 export interface WorkflowUsage {
@@ -43,9 +41,8 @@ export interface WorkflowResult<T> {
 /** A run that produced no answer, with a sentence the Coach view can show. */
 export class RunnerFailure extends Error {}
 
-const ALIAS: Record<WorkflowRequest['model'], string> = { small: 'haiku', large: 'opus' }
-
-export function claudeArgs(request: WorkflowRequest): string[] {
+/** The model comes from the story's settings; an alias Claude Code resolves, or a full name. */
+export function claudeArgs(request: WorkflowRequest, model: string): string[] {
   return [
     '-p',
     '--output-format',
@@ -53,7 +50,7 @@ export function claudeArgs(request: WorkflowRequest): string[] {
     '--json-schema',
     JSON.stringify(request.schema),
     '--model',
-    ALIAS[request.model],
+    model,
     '--system-prompt',
     request.system,
     '--tools',

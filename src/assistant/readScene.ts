@@ -65,9 +65,7 @@ Rejected: a candidate the briefing lists (an already-matched name or a near miss
 
 Developments: facts the item asserts or changes about a named thing in the story world — where someone is, what they know, what they have, what has happened to them, what a place now is. One plain sentence each, in the present tense, and the writer's own sentence quoted verbatim as evidence. Developments are about the story, never about the writing. Few and sure: a handful at most, and none you cannot quote.
 
-Name every thing by its key from the roster, exactly as given (kind:id). Answer with the JSON the schema asks for and nothing else.
-
-${GLOSSARY}`
+Name every thing by its key from the roster, exactly as given (kind:id). Answer with the JSON the schema asks for and nothing else.`
 
 /** The whole briefing for one item; pure, so tests can read it. */
 export function briefReadScene(story: Story, item: TargetKey, dict: Dictionary, ledger: Ledger): string | undefined {
@@ -145,10 +143,11 @@ export function briefReadScene(story: Story, item: TargetKey, dict: Dictionary, 
   return lines.join('\n').trimEnd() + '\n'
 }
 
-export function readSceneRequest(story: Story, item: TargetKey, dict: Dictionary, ledger: Ledger): WorkflowRequest | undefined {
+/** The request, with the writer's prompt (or the default) and the story's glossary as the rubric. */
+export function readSceneRequest(story: Story, item: TargetKey, dict: Dictionary, ledger: Ledger, rubric: string = READ_SCENE_RUBRIC): WorkflowRequest | undefined {
   const briefing = briefReadScene(story, item, dict, ledger)
   if (briefing === undefined) return undefined
-  return { workflow: READ_SCENE, system: READ_SCENE_RUBRIC, briefing, schema: READ_SCENE_SCHEMA, model: 'small' }
+  return { workflow: READ_SCENE, system: `${rubric.trim()}\n\n${GLOSSARY}`, briefing, schema: READ_SCENE_SCHEMA }
 }
 
 /**

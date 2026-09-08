@@ -5,7 +5,7 @@ import App from './App'
 import { StubProcessRunner } from './adapters/stubs'
 import type { ContinuityOutput } from './assistant/continuity'
 import { memoryLedgerStore } from './assistant/ledger'
-import { embersWorld, type TestWorld } from './test/embers'
+import { embersWorld, enableCoaching, type TestWorld } from './test/embers'
 
 beforeEach(() => {
   history.replaceState(null, '', '#')
@@ -37,7 +37,8 @@ function checkingRunner(): StubProcessRunner {
   return runner
 }
 
-async function openStory(world: TestWorld, runner: StubProcessRunner): Promise<void> {
+async function openStory(world: TestWorld, runner: StubProcessRunner, model = 'haiku'): Promise<void> {
+  await enableCoaching(world.files, model)
   render(<App platform={world.platform} runner={runner} ledgerStore={memoryLedgerStore()} autosaveDelayMs={20} />)
   await userEvent.click(await screen.findByRole('button', { name: /open a story folder/i }))
   await screen.findByRole('heading', { name: 'Embers of the Vault' })
@@ -49,7 +50,7 @@ describe('the continuity check', () => {
   test('one storyline: the lane goes out in order, the finding lands in Analysis with both ends linked, and dismisses', async () => {
     const world = embersWorld()
     const runner = checkingRunner()
-    await openStory(world, runner)
+    await openStory(world, runner, 'opus')
     // The fixture has static findings of its own; the check adds one on top.
     const before = Number(screen.getByRole('button', { name: /✓ analysis \(\d+\)/i }).textContent?.match(/\((\d+)\)/)?.[1])
     await userEvent.click(screen.getByRole('button', { name: /🧭 coach/i }))

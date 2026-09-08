@@ -260,6 +260,13 @@ async fn claude_status(claude: State<'_, assistant::ClaudePath>) -> Result<Strin
     tauri::async_runtime::spawn_blocking(move || assistant::version(&binary)).await.map_err(|e| e.to_string())?
 }
 
+/// What `claude auth status --json` prints; the page reads it.
+#[tauri::command]
+async fn claude_auth(claude: State<'_, assistant::ClaudePath>) -> Result<String, String> {
+    let binary = claude.locate()?;
+    tauri::async_runtime::spawn_blocking(move || assistant::auth(&binary)).await.map_err(|e| e.to_string())?
+}
+
 /// The state and commands, on whichever runtime: the real one in `run`,
 /// the mock one in the ipc tests below.
 fn configure<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Builder<R> {
@@ -289,6 +296,7 @@ fn configure<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Builder<R>
             spawn_claude,
             cancel_claude,
             claude_status,
+            claude_auth,
         ])
 }
 
@@ -464,11 +472,15 @@ mod ipc {
         let script = shell.dir.join("claude.cmd");
         std::fs::write(
             &script,
-            "@echo off\r\nif \"%1\"==\"--version\" goto v\r\nset /p line=\r\necho ran %1 %line%\r\nexit /b 0\r\n:v\r\necho 9.9.9 (Claude Code)\r\n",
+            "@echo off\r\nif \"%1\"==\"--version\" goto v\r\nif \"%1\"==\"auth\" goto a\r\nset /p line=\r\necho ran %1 %line%\r\nexit /b 0\r\n:v\r\necho 9.9.9 (Claude Code)\r\nexit /b 0\r\n:a\r\necho {\"loggedIn\":true,\"subscriptionType\":\"max\"}\r\n",
         )
         .unwrap();
         shell._app.state::<assistant::ClaudePath>().set(script);
         assert_eq!(shell.call("claude_status", serde_json::json!({})).unwrap(), "Claude Code 9.9.9");
+        assert_eq!(
+            shell.call("claude_auth", serde_json::json!({})).unwrap(),
+            "{\"loggedIn\":true,\"subscriptionType\":\"max\"}"
+        );
         let result = shell
             .call("spawn_claude", serde_json::json!({ "runId": "r1", "argv": ["-p"], "stdin": "hello\r\n" }))
             .unwrap();

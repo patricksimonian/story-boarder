@@ -185,6 +185,21 @@ pub fn version(binary: &Path) -> Result<String, String> {
     }
 }
 
+/// `claude auth status --json`, as printed: signed in, the account, the plan.
+pub fn auth(binary: &Path) -> Result<String, String> {
+    let mut command = command_for(binary);
+    command.args(["auth", "status", "--json"]);
+    hide_window(&mut command);
+    let output = command.output().map_err(|e| format!("Could not run Claude Code at {}: {e}", binary.display()))?;
+    let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if output.status.success() && !text.is_empty() {
+        Ok(text)
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        Err(if stderr.is_empty() { "claude auth status printed nothing".to_string() } else { stderr })
+    }
+}
+
 fn read_all(mut reader: impl Read) -> String {
     let mut bytes = Vec::new();
     let _ = reader.read_to_end(&mut bytes);

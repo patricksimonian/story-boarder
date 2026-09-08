@@ -5,7 +5,7 @@ import App from './App'
 import { StubProcessRunner } from './adapters/stubs'
 import { memoryLedgerStore } from './assistant/ledger'
 import type { ReadSceneOutput } from './assistant/readScene'
-import { embersWorld, type TestWorld } from './test/embers'
+import { embersWorld, enableCoaching, type TestWorld } from './test/embers'
 
 beforeEach(() => {
   history.replaceState(null, '', '#')
@@ -74,6 +74,7 @@ function readingRunner(): StubProcessRunner {
 }
 
 async function openStory(world: TestWorld, runner: StubProcessRunner): Promise<void> {
+  await enableCoaching(world.files)
   render(<App platform={world.platform} runner={runner} ledgerStore={memoryLedgerStore()} autosaveDelayMs={20} readIdleMs={30} />)
   await userEvent.click(await screen.findByRole('button', { name: /open a story folder/i }))
   await screen.findByRole('heading', { name: 'Embers of the Vault' })

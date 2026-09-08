@@ -127,10 +127,37 @@ export interface Platform {
  * all the seam carries. `src/assistant/` owns the argv and the parsing.
  */
 export interface ProcessRunner {
+  /** Which way this build reaches Claude Code — the Settings view says so. */
+  kind: 'desktop' | 'browser'
   /** Spawns `claude` with argv, writes stdin, resolves when it exits. */
   spawnClaude(argv: string[], stdin: string, opts?: SpawnOptions): Promise<ProcessResult>
-  /** `claude --version`, or why it can't be run, for the Coach view. */
+  /** `claude --version`, or why it can't be run. */
   status(): Promise<RunnerStatus>
+  /** `claude auth status --json`: signed in and on what plan, or not. */
+  auth(): Promise<AuthStatus>
+}
+
+export type AuthStatus =
+  | { kind: 'signed-in'; account?: string; plan?: string }
+  | { kind: 'signed-out' }
+  | { kind: 'unknown'; reason: string }
+
+/** What `claude auth status --json` prints, read into the app's shape. */
+export function readAuthJson(text: string): AuthStatus {
+  let data: { loggedIn?: unknown; email?: unknown; subscriptionType?: unknown }
+  try {
+    data = JSON.parse(text) as typeof data
+  } catch {
+    return { kind: 'unknown', reason: 'auth status printed something other than JSON' }
+  }
+  if (data.loggedIn === true) {
+    const status: AuthStatus = { kind: 'signed-in' }
+    if (typeof data.email === 'string') status.account = data.email
+    if (typeof data.subscriptionType === 'string') status.plan = data.subscriptionType
+    return status
+  }
+  if (data.loggedIn === false) return { kind: 'signed-out' }
+  return { kind: 'unknown', reason: 'auth status did not say whether anyone is signed in' }
 }
 
 export interface SpawnOptions {

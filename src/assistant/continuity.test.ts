@@ -45,12 +45,12 @@ describe('the continuity briefing', () => {
     expect(briefContinuity(s, 'nope', ledger)).toBeUndefined()
   })
 
-  test('the request is the large tier with the fixed rubric', async () => {
+  test('the request carries the rubric with the glossary', async () => {
     const request = continuityRequest(await story(), 'heist', {})!
     expect(request.workflow).toBe('check-continuity')
-    expect(request.model).toBe('large')
-    expect(request.system).toBe(CONTINUITY_RUBRIC)
+    expect(request.system.startsWith(CONTINUITY_RUBRIC)).toBe(true)
     expect(request.system).toContain('A change over time is not a contradiction')
+    expect(request.system).toContain('Vocabulary, which you use and do not translate')
   })
 
   test('findings keep only evidence that points at scenes the story has, and drop empty messages', async () => {

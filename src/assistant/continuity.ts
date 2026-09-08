@@ -57,9 +57,7 @@ export const CONTINUITY_RUBRIC = `You check one storyline of a writer's story fo
 
 You are given the storyline's scenes in order. For each: the developments a reading of that scene recorded (facts about the story world, each with the writer's sentence as evidence) and the variable state the story engine holds on entering it. A contradiction is two developments that cannot both hold on this path, or a development that contradicts the engine's state at that point (the variable says a character is alive; the scene buries her). A change over time is not a contradiction: a wound that heals, a mind that changes, a door that was shut and is now open are continuity working. A scene not yet read is a gap, not a contradiction; say nothing about it.
 
-Report few, and only what you are sure of. Each contradiction is one sentence a writer would nod at, naming both ends, with the evidence: the scene key and the quoted sentence for each end, exactly as given. Scene keys are the ids in parentheses. Answer with the JSON the schema asks for and nothing else.
-
-${GLOSSARY}`
+Report few, and only what you are sure of. Each contradiction is one sentence a writer would nod at, naming both ends, with the evidence: the scene key and the quoted sentence for each end, exactly as given. Scene keys are the ids in parentheses. Answer with the JSON the schema asks for and nothing else.`
 
 /** The lane in order with the state the engine holds on entering each scene, regardless of gates. */
 export function walkStoryline(story: Story, storylineId: Slug): { scene: Slug; state: VariableState; gated?: string }[] {
@@ -109,10 +107,10 @@ export function briefContinuity(story: Story, storylineId: Slug, ledger: Ledger)
   return lines.join('\n').trimEnd() + '\n'
 }
 
-export function continuityRequest(story: Story, storylineId: Slug, ledger: Ledger): WorkflowRequest | undefined {
+export function continuityRequest(story: Story, storylineId: Slug, ledger: Ledger, rubric: string = CONTINUITY_RUBRIC): WorkflowRequest | undefined {
   const briefing = briefContinuity(story, storylineId, ledger)
   if (briefing === undefined) return undefined
-  return { workflow: CHECK_CONTINUITY, system: CONTINUITY_RUBRIC, briefing, schema: CONTINUITY_SCHEMA, model: 'large' }
+  return { workflow: CHECK_CONTINUITY, system: `${rubric.trim()}\n\n${GLOSSARY}`, briefing, schema: CONTINUITY_SCHEMA }
 }
 
 /** Findings the app can show: evidence pointing at scenes the story has, nothing else. */

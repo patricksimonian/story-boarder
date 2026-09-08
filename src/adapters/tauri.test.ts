@@ -251,6 +251,15 @@ describe('tauriRunner', () => {
     const cancel = invoke.mock.calls.find(([c]) => c === 'cancel_claude') as [string, { runId: string }] | undefined
     expect(cancel?.[1].runId).toBe((invoke.mock.calls[1][1] as { runId: string }).runId)
 
+    expect(runner.kind).toBe('desktop')
+    invoke.mockResolvedValueOnce('{"loggedIn":true,"email":"p@example.com","subscriptionType":"max"}')
+    expect(await runner.auth()).toEqual({ kind: 'signed-in', account: 'p@example.com', plan: 'max' })
+    expect(invoke).toHaveBeenLastCalledWith('claude_auth', undefined)
+    invoke.mockResolvedValueOnce('{"loggedIn":false}')
+    expect(await runner.auth()).toEqual({ kind: 'signed-out' })
+    invoke.mockRejectedValueOnce('claude auth status printed nothing')
+    expect(await runner.auth()).toEqual({ kind: 'unknown', reason: 'claude auth status printed nothing' })
+
     invoke.mockResolvedValueOnce('Claude Code 2.1.215')
     expect(await runner.status()).toEqual({ kind: 'ready', detail: 'Claude Code 2.1.215' })
     invoke.mockRejectedValueOnce('Claude Code not found on PATH — install it and sign in, then restart the app.')

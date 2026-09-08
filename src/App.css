@@ -2538,3 +2538,81 @@ button.sb-pen:focus-visible {
 .an-dismiss:hover {
   color: var(--ink);
 }
+
+/* ---------- settings ---------- */
+.sb-settings {
+  margin-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 10px;
+}
+.settings-pane {
+  padding: 16px 20px 14px;
+  border-top: 1px solid var(--line);
+}
+.settings-pane h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+.settings-pane .sync-form {
+  max-width: 720px;
+}
+.settings-pane textarea {
+  padding: 6px 8px;
+  border: 1px solid #d8d4cc;
+  border-radius: 6px;
+  font: inherit;
+  line-height: 1.45;
+}
+.settings-json {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12.5px;
+}
+.settings-prompt {
+  font-size: 13px;
+}
+.settings-promptlabel {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.settings-switch {
+  display: flex !important;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+.settings-health {
+  margin: 0;
+  font-size: 13px;
+}
+.settings-health.error {
+  color: #a0522d;
+}
+.settings-health.passed {
+  color: #3a7d44;
+}
+.settings-health .goto {
+  margin-left: 8px;
+}
+.settings-problem {
+  margin: 0;
+  font-size: 12.5px;
+  color: #a0522d;
+}
+.settings-savebar {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+}
+.settings-savebar button {
+  padding: 6px 14px;
+}
+.coach-off {
+  margin: 0;
+  padding: 12px 20px 0;
+  font-size: 13px;
+  color: var(--muted);
+}

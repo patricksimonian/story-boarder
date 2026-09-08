@@ -11,8 +11,8 @@ import { acceptableArgv, createAssistant } from './assistant.mjs'
 let server
 afterEach(() => server?.close())
 
-async function start(spawn, version = async () => '2.1.215') {
-  server = createAssistant({ spawn, version, origins: ['http://localhost:5173'] })
+async function start(spawn, version = async () => '2.1.215', auth = async () => '{"loggedIn":true,"email":"p@example.com","subscriptionType":"max"}') {
+  server = createAssistant({ spawn, version, auth, origins: ['http://localhost:5173'] })
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
   return `http://127.0.0.1:${server.address().port}`
 }
@@ -43,6 +43,16 @@ describe('the assistant helper', () => {
       throw new Error('Claude Code not found on PATH')
     })
     expect(await (await fetch(`${down}/status`)).json()).toEqual({ error: 'Claude Code not found on PATH' })
+  })
+
+  test('reports the auth status as printed, or why it could not ask', async () => {
+    const base = await start(async () => ({ stdout: '', stderr: '', exitCode: 0 }))
+    expect(await (await fetch(`${base}/auth`)).json()).toEqual({ json: '{"loggedIn":true,"email":"p@example.com","subscriptionType":"max"}' })
+    server.close()
+    const down = await start(async () => ({ stdout: '', stderr: '', exitCode: 0 }), async () => '2.1.215', async () => {
+      throw new Error('claude auth status printed nothing')
+    })
+    expect(await (await fetch(`${down}/auth`)).json()).toEqual({ error: 'claude auth status printed nothing' })
   })
 
   test('refuses another origin, a non-print argv, and a bare run', async () => {

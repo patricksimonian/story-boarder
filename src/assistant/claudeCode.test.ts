@@ -8,12 +8,11 @@ const request: WorkflowRequest = {
   system: 'Echo the title.',
   briefing: 'Story title: Embers',
   schema: { type: 'object', properties: { echo: { type: 'string' } }, required: ['echo'] },
-  model: 'small',
 }
 
 describe('claudeArgs', () => {
   test('one validated JSON answer, only the output tool left, nothing kept, no settings loaded, not bare', () => {
-    expect(claudeArgs(request)).toEqual([
+    expect(claudeArgs(request, 'haiku')).toEqual([
       '-p',
       '--output-format',
       'json',
@@ -29,8 +28,8 @@ describe('claudeArgs', () => {
       '--setting-sources',
       '',
     ])
-    expect(claudeArgs({ ...request, model: 'large' })).toContain('opus')
-    expect(claudeArgs(request)).not.toContain('--bare')
+    expect(claudeArgs(request, 'opus')).toContain('opus')
+    expect(claudeArgs(request, 'haiku')).not.toContain('--bare')
   })
 })
 
@@ -67,7 +66,7 @@ describe('run', () => {
   test('composes argv and stdin for the runner and parses what comes back', async () => {
     const runner = new StubProcessRunner()
     runner.answerWith('ping', { echo: 'Embers' })
-    const result = await run<{ echo: string }>(runner, pingRequest('Embers'))
+    const result = await run<{ echo: string }>(runner, pingRequest('Embers'), { model: 'haiku' })
     expect(result.output).toEqual({ echo: 'Embers' })
     expect(runner.calls).toHaveLength(1)
     expect(runner.calls[0].workflow).toBe('ping')
@@ -80,10 +79,10 @@ describe('run', () => {
     runner.spawnClaude = async () => {
       throw new Error('helper not running on port 7311')
     }
-    await expect(run(runner, request)).rejects.toThrow(new RunnerFailure('helper not running on port 7311'))
+    await expect(run(runner, request, { model: 'haiku' })).rejects.toThrow(new RunnerFailure('helper not running on port 7311'))
   })
 
   test('an unanswered workflow in a test says so rather than pretending', async () => {
-    await expect(run(new StubProcessRunner(), request)).rejects.toThrow(/no canned answer for ping/)
+    await expect(run(new StubProcessRunner(), { ...request, workflow: 'nothing' }, { model: 'haiku' })).rejects.toThrow(/no canned answer for nothing/)
   })
 })

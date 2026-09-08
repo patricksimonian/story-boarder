@@ -71,3 +71,10 @@ export function embersWorld(): TestWorld {
     },
   }
 }
+
+/** Switches coaching on in story.json, the way Settings would. */
+export async function enableCoaching(files: InMemoryFileAccess, model = 'haiku'): Promise<void> {
+  const manifest = JSON.parse(await files.readText('story.json')) as { settings: Record<string, unknown> }
+  manifest.settings = { ...manifest.settings, assistant: { enabled: true, model } }
+  await files.writeText('story.json', JSON.stringify(manifest))
+}

@@ -58,14 +58,15 @@ describe('the read-scene briefing', () => {
     expect(briefReadScene(s, 'scene:nope', dictionary(s), {})).toBeUndefined()
   })
 
-  test('the request is the small tier with the fixed rubric, and stays small', async () => {
+  test('the request carries the rubric, default or the writer’s own, with the glossary, and stays small', async () => {
     const s = await story()
     const request = readSceneRequest(s, 'scene:the-job-offer', dictionary(s), {})!
     expect(request.workflow).toBe('read-scene')
-    expect(request.model).toBe('small')
-    expect(request.system).toBe(READ_SCENE_RUBRIC)
-    expect(request.system).toContain('Name every thing by its key')
+    expect(request.system.startsWith(READ_SCENE_RUBRIC)).toBe(true)
+    expect(request.system).toContain('Vocabulary, which you use and do not translate')
     expect(request.briefing.length).toBeLessThan(4000)
+    const own = readSceneRequest(s, 'scene:the-job-offer', dictionary(s), {}, 'Read it my way.\n')!
+    expect(own.system.startsWith('Read it my way.\n\nVocabulary')).toBe(true)
   })
 })
 

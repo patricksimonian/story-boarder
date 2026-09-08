@@ -4,6 +4,7 @@
  */
 
 import type {
+  AuthStatus,
   FileAccess,
   FolderChangeHandler,
   FolderWatcher,
@@ -125,10 +126,12 @@ type Canned = ProcessResult | ((stdin: string) => ProcessResult)
  * a test can assert the briefing that reached Claude Code.
  */
 export class StubProcessRunner implements ProcessRunner {
+  kind: 'desktop' | 'browser' = 'desktop'
   calls: { workflow?: string; argv: string[]; stdin: string }[] = []
   private canned = new Map<string, Canned>()
 
   statusValue: RunnerStatus
+  authValue: AuthStatus = { kind: 'signed-in', account: 'writer@example.com', plan: 'max' }
 
   constructor(status: RunnerStatus = { kind: 'ready', detail: 'Claude Code 2.1.215' }) {
     this.statusValue = status
@@ -152,11 +155,20 @@ export class StubProcessRunner implements ProcessRunner {
   async spawnClaude(argv: string[], stdin: string, opts?: SpawnOptions): Promise<ProcessResult> {
     this.calls.push({ workflow: opts?.workflow, argv, stdin })
     const canned = this.canned.get(opts?.workflow ?? '')
+    if (!canned && opts?.workflow === 'ping') {
+      // The health check pings; a stub answers it unless a test says otherwise.
+      const echo = stdin.replace(/^Story title: /, '')
+      return { stdout: JSON.stringify({ type: 'result', subtype: 'success', result: JSON.stringify({ echo }), structured_output: { echo } }), stderr: '', exitCode: 0 }
+    }
     if (!canned) return { stdout: '', stderr: `no canned answer for ${opts?.workflow ?? 'this workflow'}`, exitCode: 1 }
     return typeof canned === 'function' ? canned(stdin) : canned
   }
 
   async status(): Promise<RunnerStatus> {
     return this.statusValue
+  }
+
+  async auth(): Promise<AuthStatus> {
+    return this.authValue
   }
 }
