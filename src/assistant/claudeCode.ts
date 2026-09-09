@@ -38,8 +38,22 @@ export interface WorkflowResult<T> {
   usage?: WorkflowUsage
 }
 
-/** A run that produced no answer, with a sentence the Coach view can show. */
-export class RunnerFailure extends Error {}
+/**
+ * A run that produced no answer, with a sentence the app can show. A
+ * limit — Claude Code's 429, "You've hit your session limit · resets
+ * 5:30pm" — is the one failure worth stopping everything for, since
+ * every further call would meet the same wall.
+ */
+export class RunnerFailure extends Error {
+  status: number | undefined
+  limit: boolean
+
+  constructor(message: string, status?: number) {
+    super(message)
+    this.status = status
+    this.limit = status === 429 || /\b(session|usage|rate) limit\b/i.test(message)
+  }
+}
 
 /** The model comes from the story's settings; an alias Claude Code resolves, or a full name. */
 export function claudeArgs(request: WorkflowRequest, model: string): string[] {
@@ -65,6 +79,7 @@ interface ClaudeJson {
   structured_output?: unknown
   result?: unknown
   is_error?: boolean
+  api_error_status?: number | null
   total_cost_usd?: number
   usage?: { input_tokens?: number; output_tokens?: number }
 }
@@ -93,7 +108,7 @@ export function parseClaudeResult<T>(stdout: string, stderr: string, exitCode: n
     return { output: data.structured_output as T, usage }
   }
   const text = typeof data?.result === 'string' ? data.result.trim() : ''
-  throw new RunnerFailure(text || 'Claude Code returned no structured output.')
+  throw new RunnerFailure(text || 'Claude Code returned no structured output.', typeof data?.api_error_status === 'number' ? data.api_error_status : undefined)
 }
 
 function firstLine(text: string): string {

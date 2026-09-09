@@ -25,7 +25,7 @@ export function NotesView({
   onDelete,
   mentions,
   namedIn = [],
-  onOpenTarget = () => {},
+  onOpenTarget = () => { },
   canRead = false,
   reading = false,
   readProblem = null,
@@ -125,7 +125,6 @@ export function NotesView({
     <section className="hist-wrap" role="region" aria-label="Notes">
       <div className="view-bar">
         <h2>Notes</h2>
-        <span className="view-sub">folders and pages — pick a section, and new things land inside it</span>
       </div>
       <div className="notes-split">
         <div className="notes-list">

@@ -227,6 +227,34 @@ describe('the scene read', () => {
     })
   })
 
+  test('a session limit stops the whole-story pass at once, stands as a notice, and holds reads until dismissed', async () => {
+    const world = embersWorld()
+    await world.files.writeText('scenes/the-dry-cistern.md', CISTERN)
+    const runner = new StubProcessRunner()
+    runner.answer('read-scene', {
+      stdout: JSON.stringify({ type: 'result', subtype: 'success', is_error: true, api_error_status: 429, result: "You've hit your session limit · resets 5:30pm (America/Vancouver)" }),
+      stderr: '',
+      exitCode: 0,
+    })
+    await openStory(world, runner)
+    await userEvent.click(screen.getByRole('button', { name: /🧭 coach/i }))
+    const coach = within(await screen.findByRole('region', { name: /^coach$/i }))
+    const all = coach.getByRole('button', { name: 'Read every changed scene' })
+    await waitFor(() => expect(all).toBeEnabled())
+    await userEvent.click(all)
+    const notice = await screen.findByRole('status', { name: 'Claude Code limit' })
+    expect(notice).toHaveTextContent('Claude Code limit')
+    expect(notice).toHaveTextContent("You've hit your session limit · resets 5:30pm (America/Vancouver)")
+    await waitFor(() => expect(coach.getByRole('button', { name: 'Read every changed scene' })).toBeDisabled())
+    expect(readCalls(runner)).toHaveLength(1)
+
+    await userEvent.click(screen.getByRole('button', { name: /storylines/i }))
+    const editor = await openCistern()
+    expect(within(editor).getByRole('button', { name: 'Read' })).toBeDisabled()
+    await userEvent.click(within(notice).getByRole('button', { name: 'Dismiss' }))
+    await waitFor(() => expect(within(editor).getByRole('button', { name: 'Read' })).toBeEnabled())
+  })
+
   test('a read that fails says why beside the button', async () => {
     const world = embersWorld()
     await world.files.writeText('scenes/the-dry-cistern.md', CISTERN)

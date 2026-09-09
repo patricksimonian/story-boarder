@@ -51,6 +51,22 @@ describe('parseClaudeResult', () => {
     expect(() => parseClaudeResult(stdout, '', 0)).toThrow(new RunnerFailure('Not logged in · Please run /login'))
   })
 
+  test('a session limit is the failure everything stops for', () => {
+    const stdout = JSON.stringify({ type: 'result', subtype: 'success', is_error: true, api_error_status: 429, result: "You've hit your session limit · resets 5:30pm (America/Vancouver)" })
+    let caught: unknown
+    try {
+      parseClaudeResult(stdout, '', 0)
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toBeInstanceOf(RunnerFailure)
+    expect((caught as RunnerFailure).message).toBe("You've hit your session limit · resets 5:30pm (America/Vancouver)")
+    expect((caught as RunnerFailure).status).toBe(429)
+    expect((caught as RunnerFailure).limit).toBe(true)
+    expect(new RunnerFailure('Not logged in').limit).toBe(false)
+    expect(new RunnerFailure('Rate limit reached, try later').limit).toBe(true)
+  })
+
   test('a non-zero exit: stderr is the failure, stdout when stderr is empty', () => {
     expect(() => parseClaudeResult('', '\nerror: unknown option --nope\n', 2)).toThrow('error: unknown option --nope')
     expect(() => parseClaudeResult('boom', '', 1)).toThrow('boom')

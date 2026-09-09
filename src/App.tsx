@@ -19,6 +19,7 @@ import { continuityRequest, findingsFrom, type ContinuityFinding, type Continuit
 import { checkHealth, type Health } from './assistant/health'
 import { ledgerEntryFrom, readSceneRequest, type ReadSceneOutput } from './assistant/readScene'
 import { run } from './assistant/runner'
+import { RunnerFailure } from './assistant/claudeCode'
 import { assistantSettings, DEFAULT_PROMPTS, loadPrompts, savePrompts, withAssistant, type AssistantSettings, type Prompts } from './assistant/settings'
 import type { MentionContext } from './mentions/context'
 import { describeTarget } from './mentions/describe'
@@ -255,7 +256,15 @@ export default function App({
     promptsRef.current = next
     setPromptsState(next)
   }
-  const coachingOn = assistant.enabled && health.kind === 'passed'
+  // Claude Code's session limit: one standing notice, and nothing model-
+  // shaped runs until the writer dismisses it or a later run gets through.
+  const [limit, setLimitState] = useState<string | null>(null)
+  const limitRef = useRef<string | null>(null)
+  const setLimit = (next: string | null) => {
+    limitRef.current = next
+    setLimitState(next)
+  }
+  const coachingOn = assistant.enabled && health.kind === 'passed' && limit === null
   const [readingAll, setReadingAll] = useState<{ done: number; total: number } | null>(null)
   const readAllAbort = useRef<AbortController | null>(null)
   const readTimer = useRef<number | undefined>(undefined)
@@ -819,9 +828,11 @@ export default function App({
       setLedger(next)
       store.save(folder.name, next)
       setReadProblem(null)
+      setLimit(null)
       return true
     } catch (error) {
-      setReadProblem((error as Error).message)
+      if (error instanceof RunnerFailure && error.limit) setLimit(error.message)
+      else setReadProblem((error as Error).message)
       return false
     } finally {
       setReading((set) => {
@@ -848,7 +859,7 @@ export default function App({
     readAllAbort.current = controller
     setReadingAll({ done: 0, total: items.length })
     for (let i = 0; i < items.length; i++) {
-      if (controller.signal.aborted) break
+      if (controller.signal.aborted || limitRef.current !== null) break
       await readItem(items[i], { signal: controller.signal })
       setReadingAll({ done: i + 1, total: items.length })
     }
@@ -870,8 +881,10 @@ export default function App({
       const found = findingsFrom(result.output, current.story, id)
       setContinuity((list) => [...list.filter((f) => f.storyline !== id), ...found])
       setReadProblem(null)
+      setLimit(null)
     } catch (error) {
-      setReadProblem((error as Error).message)
+      if (error instanceof RunnerFailure && error.limit) setLimit(error.message)
+      else setReadProblem((error as Error).message)
     }
   }
 
@@ -883,7 +896,7 @@ export default function App({
     const controller = new AbortController()
     checkAbort.current = controller
     for (let i = 0; i < lanes.length; i++) {
-      if (controller.signal.aborted) break
+      if (controller.signal.aborted || limitRef.current !== null) break
       setChecking({ storyline: lanes[i].id, done: i, total: lanes.length })
       await checkStoryline(lanes[i].id, controller.signal)
     }
@@ -1184,6 +1197,7 @@ export default function App({
     setContinuity([])
     setReadProblem(null)
     setHealth({ kind: 'idle' })
+    setLimit(null)
     setPrompts(DEFAULT_PROMPTS)
     queuedConflicts.current = []
     setCreating(null)
@@ -1550,6 +1564,16 @@ export default function App({
           problems={problems}
           onEdit={(problem) => void openRawEditor(problem.path, problem.message)}
         />
+        {limit && (
+          <div className="limit-bar" role="status" aria-label="Claude Code limit">
+            <span className="limit-token">Claude Code limit</span>
+            <span>{limit}</span>
+            <span className="limit-hint">Reads and checks wait until it lifts.</span>
+            <button type="button" onClick={() => setLimit(null)}>
+              Dismiss
+            </button>
+          </div>
+        )}
         {view.level === 'storylines' && (
           <Board
             story={story}

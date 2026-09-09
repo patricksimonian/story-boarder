@@ -88,6 +88,23 @@ describe('the reference library', () => {
     })
   })
 
+  test('a tag is written in one form, and folds into the spelling the story already uses', async () => {
+    const world = embersWorld()
+    await world.files.writeText('places/the-vault.md', '---\nid: the-vault\ntags: [human, underhive]\n---\n\n# The Vault\n')
+    const view = await openLibrary(world)
+    await userEvent.click(within(view).getByRole('button', { name: 'Open character Mara' }))
+    // With the story's tags on offer, the box is a combobox to the accessibility tree; the label still names it.
+    const tags = within(view).getByRole('combobox', { name: /^tags$/i })
+    await userEvent.type(tags, 'NPC{enter}Humans{enter}Dark Forest,npc{enter}')
+    await waitFor(async () => expect(await world.files.readText('characters/mara.md')).toContain('tags: [npc, human, dark-forest]'))
+    expect(within(view).getByRole('group', { name: /^tags$/i })).toHaveTextContent(/npc.*human.*dark-forest/)
+    // The story's tags are on offer as you type.
+    expect(tags).toHaveAttribute('list')
+    expect([...document.querySelectorAll(`#${tags.getAttribute('list')} option`)].map((o) => (o as HTMLOptionElement).value)).toEqual(
+      expect.arrayContaining(['human', 'underhive']),
+    )
+  })
+
   test('images land in assets/ and on the mood board; removal keeps the file', async () => {
     const world = embersWorld()
     const view = await openLibrary(world)

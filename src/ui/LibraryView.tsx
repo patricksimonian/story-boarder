@@ -5,6 +5,7 @@ import type { MentionContext } from '../mentions/context'
 import type { Target } from '../mentions/match'
 import { NamedIn } from './NamedIn'
 import { ReadOutcome, type ReadInfo } from './ReadOutcome'
+import { foldTag, tagIndex } from '../tags/canon'
 import { ChipsField } from './ChipsField'
 import { MoodBoard } from './MoodBoard'
 import { ProseEditor } from './ProseEditor'
@@ -35,7 +36,7 @@ export function LibraryView({
   onOpenTarget = () => { },
   aliasProposals = [],
   onAcceptAlias = () => { },
-  onDismissAlias = () => {},
+  onDismissAlias = () => { },
   canRead = false,
   reading = false,
   readProblem = null,
@@ -90,7 +91,7 @@ export function LibraryView({
     <section className="hist-wrap" role="region" aria-label="Library">
       <div className="view-bar">
         <h2>Library</h2>
-        <span className="view-sub">characters, places, and lore — pick a shelf, and new pages land on it</span>
+        <span className="view-sub">characters, places, and lore</span>
       </div>
       <div className="notes-split">
         <div className="notes-list">
@@ -167,6 +168,8 @@ export function LibraryView({
               values={selected.tags}
               onChange={(tags) => onEdit({ ...selected, tags })}
               placeholder="type one, press Enter"
+              normalize={(value) => foldTag(value, tagIndex(story).map((row) => row.tag))}
+              suggestions={tagIndex(story).map((row) => row.tag)}
             />
             <ChipsField
               key={`aliases-${selected.kind}/${selected.id}`}

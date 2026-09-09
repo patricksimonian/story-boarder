@@ -32,7 +32,6 @@ export function SettingsView({
     <section className="hist-wrap" role="region" aria-label="Settings">
       <div className="view-bar">
         <h2>Settings</h2>
-        <span className="view-sub">the story's title, then Claude Code — nothing lands until you save a pane</span>
       </div>
       {/* Each pane is keyed on what the files hold, so a save or an outside edit starts it over from the file. */}
       <StoryPane key={`${manifest.title}\n${JSON.stringify(manifest.settings)}`} manifest={manifest} onSave={onSaveStory} />
@@ -111,10 +110,9 @@ function ClaudePane({
 
   return (
     <div className="settings-pane" aria-label="Claude Code settings">
-      <h3>Claude Code</h3>
+      <h3>Coach Claude</h3>
       <p className="view-note">
-        Coaching reads your scenes and checks your storylines through the Claude Code you are signed into. Nothing else leaves the machine.
-        {runnerKind === 'browser' && ' In a browser the app reaches it through the helper: run pnpm assistant at the project and leave it running.'}
+        {runnerKind === 'browser' && 'Coach Claude is accessed by an api server. Make sure it is running.'}
         {runnerKind === 'none' && ' This build has no way to reach Claude Code.'}
       </p>
       <div className="sync-form">
@@ -166,7 +164,6 @@ function ClaudePane({
         <label className="settings-switch">
           <input type="checkbox" role="switch" aria-label="Read automatically" checked={autoRead} disabled={!enabled} onChange={(e) => setAutoRead(e.target.checked)} />
           Read automatically after a save
-          <span className="settings-hint">— otherwise only the Read buttons and the whole-story pass read anything</span>
         </label>
         <PromptField label="Read prompt" name="readScene" value={readScene} fallback={DEFAULT_PROMPTS.readScene} disabled={!enabled} onChange={setReadScene} />
         <PromptField

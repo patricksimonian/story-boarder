@@ -18,6 +18,8 @@ export function ChipsField({
   onAccept = () => {},
   onDismiss = () => {},
   proposalHint,
+  normalize = (value) => value,
+  suggestions = [],
 }: {
   /** The words beside the field. */
   label: string
@@ -33,15 +35,22 @@ export function ChipsField({
   onAccept?: (value: string) => void
   onDismiss?: (value: string) => void
   proposalHint?: string
+  /** The one form a value is written in — tags fold to the story's spelling here; aliases are left as typed. */
+  normalize?: (value: string) => string
+  /** Values to offer as the writer types. */
+  suggestions?: string[]
 }) {
   const [text, setText] = useState('')
+  const listId = `chips-${noun}-suggestions`
 
   const commit = () => {
-    const next = text
-      .split(',')
-      .map((t) => t.trim())
-      .filter(Boolean)
-      .filter((t) => !values.some((v) => v.toLowerCase() === t.toLowerCase()))
+    const next: string[] = []
+    for (const raw of text.split(',')) {
+      const value = normalize(raw.trim())
+      if (!value) continue
+      if (values.some((v) => v.toLowerCase() === value.toLowerCase()) || next.some((v) => v.toLowerCase() === value.toLowerCase())) continue
+      next.push(value)
+    }
     setText('')
     if (next.length) onChange([...values, ...next])
   }
@@ -72,6 +81,7 @@ export function ChipsField({
         <input
           className="chips-input"
           aria-label={name}
+          list={suggestions.length ? listId : undefined}
           placeholder={values.length === 0 ? placeholder : ''}
           value={text}
           onChange={(e) => {
@@ -91,6 +101,13 @@ export function ChipsField({
           }}
           onBlur={commit}
         />
+        {suggestions.length > 0 && (
+          <datalist id={listId}>
+            {suggestions.map((value) => (
+              <option key={value} value={value} />
+            ))}
+          </datalist>
+        )}
       </div>
     </div>
   )

@@ -172,6 +172,6 @@ describe('the Claude pane', () => {
     const runner = new StubProcessRunner()
     runner.kind = 'browser'
     const view = await openSettings(world, runner)
-    expect(view.getByLabelText('Claude Code settings')).toHaveTextContent(/run pnpm assistant/)
+    expect(view.getByLabelText('Claude Code settings')).toHaveTextContent(/Make sure it is running/)
   })
 })
