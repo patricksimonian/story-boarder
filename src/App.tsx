@@ -725,6 +725,11 @@ export default function App({
       const shown: ReadNote = { ...note }
       if (note.entity) shown.entityTitle = dict?.targets.get(note.entity)?.title
       if (note.kind === 'define') shown.action = defineAction(note, scene) ?? undefined
+      if (note.against) {
+        const target = dict?.targets.get(note.against.where)
+        shown.againstTitle = target?.title ?? note.against.where
+        if (target) shown.openAgainst = () => void openTarget(note.against!.where)
+      }
       return shown
     })
     return {
@@ -849,7 +854,7 @@ export default function App({
         signal: controller.signal,
         onProgress: (progress) => setReadProgress((all) => ({ ...all, [item]: { ...progress, startedAt } })),
       })
-      const next = { ...ledgerRef.current, [item]: ledgerEntryFrom(result.output, text, dictNow) }
+      const next = { ...ledgerRef.current, [item]: ledgerEntryFrom(result.output, text, dictNow, Date.now(), item) }
       setLedger(next)
       store.save(folder.name, next)
       setLimit(null)

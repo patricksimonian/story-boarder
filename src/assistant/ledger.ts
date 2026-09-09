@@ -42,6 +42,10 @@ export interface EditorNote {
   kind: 'continuity' | 'loose-end' | 'define' | 'other'
   message: string
   quote: string
+  /** What the writer could do about it, one sentence starting with a verb. */
+  suggestion?: string
+  /** For a continuity note: the other end — the page or scene it clashes with, and its sentence. */
+  against?: { where: string; quote: string }
   /** The thing it concerns, when it concerns one the story already has. */
   entity?: TargetKey
   /** For a define note: the thing as written on the page. */

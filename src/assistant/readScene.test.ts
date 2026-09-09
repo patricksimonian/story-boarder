@@ -123,7 +123,10 @@ describe('what the read leaves in the ledger', () => {
           { kind: 'define', message: 'The Keepers are mentioned, but no lore page describes them.', quote: 'q', name: 'the Keeper', defineAs: 'lore' },
           { kind: 'define', message: 'Rook is mentioned, but no page describes him.', quote: 'q', name: 'Rook', defineAs: 'character' },
           { kind: 'define', message: 'trust is untracked.', quote: 'q', name: 'trust', defineAs: 'variable', variable: { id: 'trust', type: 'number', initial: '0', description: 'x' } },
-          { kind: 'define', message: 'Trust wants tracking.', quote: 'q', name: 'Trust Level', defineAs: 'variable', variable: { id: 'Trust Level', type: 'number', initial: '0', description: 'How far.' } },
+          { kind: 'define', message: 'Trust between them is state the story will want to test.', quote: 'q', name: 'Trust Level', defineAs: 'variable', variable: { id: 'Trust Level', type: 'number', initial: '0', description: 'How far.' } },
+          { kind: 'continuity', message: 'The Keepers page says Keepers cannot be replaced, and this page says one is.', quote: 'q', against: { where: 'lore:the-keepers', quote: 'No Keeper can be replaced.' }, suggestion: 'Decide which holds and fix the other.' },
+          { kind: 'continuity', message: 'A topic with no other end at all here.', quote: 'q' },
+          { kind: 'continuity', message: 'Topic only', quote: 'q', against: { where: 'lore:the-keepers', quote: 'x' } },
           { kind: 'define', message: 'Rook is here and not listed.', quote: 'Rook fed the stove.', entity: 'character:rook', defineAs: 'character' },
           { kind: 'define', message: 'names nothing', quote: 'q' },
           { kind: 'cast', message: 'an old kind', quote: 'q', name: 'x' },
@@ -145,15 +148,35 @@ describe('what the read leaves in the ledger', () => {
         { kind: 'define', message: 'The Atacam has no page.', quote: 'the Atacam', name: 'the Atacam', defineAs: 'place' },
         {
           kind: 'define',
-          message: 'Trust wants tracking.',
+          message: 'Trust between them is state the story will want to test.',
           quote: 'q',
           name: 'Trust Level',
           defineAs: 'variable',
           variable: { id: 'trust_level', type: 'number', initial: '0', description: 'How far.' },
         },
+        {
+          kind: 'continuity',
+          message: 'The Keepers page says Keepers cannot be replaced, and this page says one is.',
+          quote: 'q',
+          suggestion: 'Decide which holds and fix the other.',
+          against: { where: 'lore:the-keepers', quote: 'No Keeper can be replaced.' },
+        },
         { kind: 'define', message: 'Rook is here and not listed.', quote: 'Rook fed the stove.', entity: 'character:rook', defineAs: 'character' },
         { kind: 'other', message: 'Something an editor would say.', quote: 'q' },
       ],
     })
+  })
+
+  test('a "not listed on the scene" note is dropped on a note or a page, which have no characters field', async () => {
+    const s = await story()
+    const dict = dictionary(s)
+    const output = {
+      mentions: [],
+      rejected: [],
+      developments: [],
+      notes: [{ kind: 'define', message: 'Rook is on this page but not listed anywhere.', quote: 'q', entity: 'character:rook', defineAs: 'character' }],
+    }
+    expect(ledgerEntryFrom(output, 'the text', dict, 1, 'note:plan').notes).toEqual([])
+    expect(ledgerEntryFrom(output, 'the text', dict, 1, 'scene:the-job-offer').notes).toHaveLength(1)
   })
 })

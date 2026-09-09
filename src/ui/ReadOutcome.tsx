@@ -18,6 +18,9 @@ export interface ReadNote extends EditorNote {
   entityTitle?: string
   /** The fix the app can apply for this note, when it can. */
   action?: { label: string; run: () => void }
+  /** For a continuity note: the other end's title, and how to go there. */
+  againstTitle?: string
+  openAgainst?: () => void
 }
 
 const KIND_LABEL: Record<EditorNote['kind'], string> = {
@@ -51,29 +54,51 @@ export function ReadOutcome({ read }: { read?: ReadInfo | null }) {
     <div className="read-outcome" role="region" aria-label="Last read">
       <p className="read-summary">{read.summary}</p>
       {read.notes.length > 0 && (
-        <ul className="read-notes" aria-label="Editor’s notes">
-          {read.notes.map((note, i) => (
-            <li key={i} className={`read-note ${note.kind}`}>
-              <span className="read-kind">{KIND_LABEL[note.kind]}</span>
-              <span className="read-message" title={note.quote}>
-                {defineHeadline(note) ? (
-                  <>
-                    <strong>{defineHeadline(note)}</strong> {note.message}
-                  </>
-                ) : (
-                  note.message
+        <>
+          <h5 className="read-heading">Editor’s notes</h5>
+          <ul className="read-notes" aria-label="Editor’s notes">
+            {read.notes.map((note, i) => (
+              <li key={i} className={`read-note ${note.kind}`}>
+                <span className="read-kind">{KIND_LABEL[note.kind]}</span>
+                <span className="read-message">
+                  {defineHeadline(note) ? (
+                    <>
+                      <strong>{defineHeadline(note)}</strong> {note.message}
+                    </>
+                  ) : (
+                    note.message
+                  )}
+                </span>
+                {note.quote && (
+                  <q className="read-quote" title="On this page">
+                    {note.quote}
+                  </q>
                 )}
-              </span>
-              {note.quote && <q className="read-quote">{note.quote}</q>}
-              {note.action && (
-                <button type="button" className="goto" onClick={note.action.run}>
-                  {note.action.label}
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
+                {note.against && (
+                  <span className="read-against">
+                    against{' '}
+                    {note.openAgainst ? (
+                      <button type="button" className="goto" onClick={note.openAgainst}>
+                        {note.againstTitle} ↗
+                      </button>
+                    ) : (
+                      <span>{note.againstTitle ?? note.against.where}</span>
+                    )}
+                    : <q>{note.against.quote}</q>
+                  </span>
+                )}
+                {note.suggestion && <span className="read-suggestion">{note.suggestion}</span>}
+                {note.action && (
+                  <button type="button" className="goto" onClick={note.action.run}>
+                    {note.action.label}
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </>
       )}
+      {read.developments.length > 0 && <h5 className="read-heading">Developments</h5>}
       {read.developments.length > 0 && (
         <ul className="read-developments">
           {read.developments.map((d, i) => (

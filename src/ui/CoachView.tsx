@@ -89,6 +89,7 @@ export function CoachView({
                       <span className="coach-fact" title={note.quote}>
                         {note.message}
                       </span>
+                      {note.suggestion && <span className="coach-where"> {note.suggestion}</span>}
                     </li>
                   ))}
                 </ul>
