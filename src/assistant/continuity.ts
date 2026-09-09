@@ -65,7 +65,7 @@ A contradiction is two things that cannot both hold on this path: a scene agains
 
 Report few, and only what you are sure of. Each contradiction is one sentence a writer would nod at, naming both ends, with the evidence: the scene key and the quoted sentence for each end, exactly as given (when one end is a page or a note, quote it and give the scene end as the scene). Scene keys are the ids in parentheses. Answer with the JSON the schema asks for and nothing else.`
 
-/** How much of any one page, note, or unread prose travels; the roster stays bounded by the lane. */
+/** How much of any one page, note, or unread prose travels; the list of pages stays bounded by the lane. */
 const PAGE_BUDGET = 1600
 const NOTE_LIMIT = 8
 

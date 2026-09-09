@@ -126,6 +126,11 @@ describe('the literal pass', () => {
     expect(titleVariants('The Keepers').sort()).toEqual(['Keeper', 'Keepers', 'The Keeper'])
     expect(titleVariants('Mara')).toEqual(['Maras'])
     expect(titleVariants('The Vault').sort()).toEqual(['The Vaults', 'Vault', 'Vaults'])
+    // A title that writes its word as a common noun gives no bare form: "The seed" is not everywhere a seed is.
+    expect(titleVariants('The seed')).toEqual(['The seeds'])
+    s.notes.set('seed', note('seed', 'The seed'))
+    expect(findMentions('All great things start with a single seed.', dictionary(s))).toEqual([])
+    expect(brief(findMentions('Back to The seed.', dictionary(s)))).toEqual([['The seed', 'note:seed', 'certain']])
   })
 
   test('an alias is a name like any other', () => {

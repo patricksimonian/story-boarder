@@ -26,7 +26,7 @@ async function story() {
 }
 
 describe('the read-scene briefing', () => {
-  test('carries the item, its engine, the world it touches, the roster, what the matcher found, what came before, and the registry', async () => {
+  test('carries the item, its engine, the world it touches, what the story has, what the matcher found, what came before, and the registry', async () => {
     const s = await story()
     const ledger: Ledger = {
       'scene:cold-open': { hash: 'h', readAt: 1, mentions: [], rejected: [], developments: [{ entity: 'character:rook', fact: 'Rook has the ledger scrap.', quote: 'q' }] },
@@ -41,7 +41,7 @@ describe('the read-scene briefing', () => {
     expect(briefing).toContain('# The world this page touches')
     expect(briefing).toContain('## character: Rook (character:rook) — also called "the lifter"\n\nA lifter.')
     expect(briefing).toContain('# Notes that bear on it (the notebook)\n\n## note: The Plan (note:plan)\n\nRook goes first.')
-    expect(briefing).toContain('characters: Mara (character:mara); Rook (character:rook) — also called "the lifter"')
+    expect(briefing).toContain('characters: Mara (character:mara): The door-woman.; Rook (character:rook) — also called "the lifter": A lifter.')
     expect(briefing).toContain('notes: The Plan (note:plan)')
     expect(briefing).toContain('Cold Open: Lowmarket (scene:cold-open)')
     expect(briefing).not.toContain('The Job Offer (scene:the-job-offer)')
@@ -100,7 +100,7 @@ describe('the read-scene briefing', () => {
 })
 
 describe('what the read leaves in the ledger', () => {
-  test('keys the roster lacks are dropped, blanks are dropped, the hash is of the text read', async () => {
+  test('keys the story lacks are dropped, blanks are dropped, the hash is of the text read', async () => {
     const s = await story()
     const dict = dictionary(s)
     const entry = ledgerEntryFrom(
@@ -112,7 +112,11 @@ describe('what the read leaves in the ledger', () => {
           { quote: 'a line from her page, not this one', entity: 'character:mara' },
           { quote: 'the text and then far too many words to be a phrase at all', entity: 'character:mara' },
         ],
-        rejected: [{ quote: 'Maara', candidate: 'character:mara', why: 'a different word' }, { quote: 'x', candidate: 'nope', why: '' }],
+        rejected: [
+          { quote: 'Maara', candidate: 'character:mara', why: 'a different word' },
+          { quote: 'x', candidate: 'nope', why: '' },
+          { quote: 'Everything must live and then die', candidate: 'character:rook', why: 'a theme, not the lifter' },
+        ],
         developments: [
           { entity: 'character:mara', fact: ' Mara stops watching the door. ', quote: 'Maara stopped watching it.' },
           { entity: 'place:nowhere', fact: 'nothing', quote: '' },
@@ -134,12 +138,12 @@ describe('what the read leaves in the ledger', () => {
           { kind: 'other', message: 'Something an editor would say.', quote: 'q', entity: 'character:ghost' },
         ],
       },
-      'the text, where the door-woman stood',
+      'the text, where the door-woman stood, and Maara too',
       dict,
       42,
     )
     expect(entry).toEqual({
-      hash: hashText('the text, where the door-woman stood'),
+      hash: hashText('the text, where the door-woman stood, and Maara too'),
       readAt: 42,
       mentions: [{ quote: 'The door-woman', entity: 'character:mara' }],
       rejected: [{ quote: 'Maara', candidate: 'character:mara', why: 'a different word' }],

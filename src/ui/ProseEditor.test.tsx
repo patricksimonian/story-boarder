@@ -146,7 +146,7 @@ describe('mentions in the prose editor', () => {
         const at = text.indexOf('the raven king')
         return at < 0 ? [] : [{ from: at, to: at + 14, quote: 'the raven king', targets: [], certainty: 'unknown' }]
       },
-      roster: () => [
+      everything: () => [
         { kind: 'character', id: 'king-naviro', title: 'King Naviro' },
         { kind: 'place', id: 'the-roost', title: 'The Roost' },
       ],

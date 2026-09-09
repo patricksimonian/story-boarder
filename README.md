@@ -59,6 +59,10 @@ The coach runs through the Claude Code you have installed and signed into. Insta
 
 With it on, prose that names a character, place, lore page, note, scene, or variable lights up in every editor; hover a name for its page and where else it is named, or to rule on what a phrase means. A read, from the Read button or after each save if you switch that on, is an editor's pass over the page against the library, the notebook, and the scenes before it: it records what the page says about who is in it and what changes, and leaves notes — a clash with the world, a loose end, state the engine should track, anything the page treats as part of the story that has no page, scene, note, or variable yet. Those last are drawn in orange in the prose; the card on one creates the thing in a click, or says it is nothing. The Coach view keeps the log, and a continuity check walks a storyline through it and reports what cannot all be true, in Analysis. The mention pipeline works without Claude Code; the reads and checks need it.
 
+### Evals for the coach
+
+The reads are a model's judgement, so they are measured rather than assumed. `pnpm eval:coach` runs the real reads, through your own Claude Code, against the fixtures under `evals/` with stated expectations — the Warden has no page, "the raven king" is King Naviro — three times each, and reports a pass rate per expectation; an expectation passes at two of three. It spends your usage, so it never runs with `pnpm test`. `EVAL_RUNS`, `EVAL_MODEL`, and `EVAL_ONLY` narrow it; the last run's answers land in `evals/results/last-run.json`. When a read misses something on your own story, the fixture that reproduces it belongs there.
+
 ## To Dos
 
 - nothing queued: the model coach of issue 11 (state worth tracking, structure) landed as the editor's notes in the read, and missing references land as orange names.

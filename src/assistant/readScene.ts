@@ -3,7 +3,7 @@ import { variableUsage } from '../engine/usage'
 import { GLOSSARY } from './glossary'
 import { hashText, type EditorNote, type Ledger, type LedgerEntry } from './ledger'
 import { findMentions, itemText, mentionIndex, type Dictionary } from '../mentions/match'
-import { parseTargetKey, targetKey } from '../mentions/verdicts'
+import { parseTargetKey, phraseKey, targetKey } from '../mentions/verdicts'
 import type { JsonSchema, WorkflowRequest } from './claudeCode'
 
 /**
@@ -113,19 +113,31 @@ export const READ_SCENE_SCHEMA: JsonSchema = {
 
 export const READ_SCENE_RUBRIC = `You are the editor who has read the whole story and is now reading one page of it for a writing tool. You never write prose, never rewrite, never invent. You report, and every report quotes the page.
 
-First, the bookkeeping. Mentions: phrases on this page that refer to a named thing on the roster but were not already matched by name — a role ("the smith"), a relation ("her sister"), an epithet, a nickname, a title the roster gives another way ("the raven king" for King Naviro). A phrase that means a roster thing under another name is always a mention with that thing's key, never a note about a name to track; the writer confirms it on the page, so a likely reading is enough. Resolve only what the text supports; a pronoun with two possible referents is left alone; never list a pronoun on its own; never repeat a phrase the briefing says is already matched. Rejected: a candidate the briefing lists that does not refer to that thing here — a common word that happens to be a title, a name used about the writing rather than in the story, a misspelling that is a different word. Developments: facts this page asserts or changes about a named thing in the story world — where someone is, what they know, what they have, what has happened to them, what a place now is — one plain present-tense sentence each with the writer's sentence quoted verbatim. Few and sure.
+First, the bookkeeping. Mentions: phrases on this page that refer to something the story has — a library page, a note, a scene, a variable — but were not already matched by name — a role ("the smith"), a relation ("her sister"), an epithet, a nickname, a title the library gives another way ("the salt queen" for Queen Ilsabet). A phrase that means something the story has, under another name, is always a mention with that thing's key, never a note about a name to track; the writer confirms it on the page, so a likely reading is enough.  Resolve only what the text supports; a pronoun with two possible referents is left alone; never list a pronoun on its own; never repeat a phrase the briefing says is already matched. Rejected: a candidate the briefing lists that does not refer to that thing here — a common word that happens to be a title, a name used about the writing rather than in the story, a misspelling that is a different word. Developments: facts this page asserts or changes about a named thing in the story world — where someone is, what they know, what they have, what has happened to them, what a place now is — one plain present-tense sentence each with the writer's sentence quoted verbatim. Few and sure.
 
 Then the notes, which are the point. Every note has the same shape, and a note that does not fit it is dropped unread. message is one full sentence stating what is the case on this page — never a title, a topic, or a phrase like "the Keepers' burden": say what happens, who it concerns, and what is wrong or open. quote is the sentence on this page it rests on, verbatim. suggestion is one sentence saying what the writer could do about it, starting with a verb: "Decide whether…", "Add a line where…", "Check the Keepers page against…", "Create a page for…". The kinds:
-- continuity: this page against the world the library pages and notes lay down, or against what the scenes before it developed. A continuity note names both ends: message says what this page says and what the other page says, and against carries the other end — where is that page's key from the roster or briefing (kind:id) and quote is its sentence, verbatim. A continuity note without against is not a continuity note and is dropped. A change over time is not a contradiction; a flat clash is. A page in the library is a reference a scene may reveal to be belief rather than fact; say so only when the clash has no such reading.
+- continuity: this page against the world the library pages and notes lay down, or against what the scenes before it developed. A continuity note names both ends: message says what this page says and what the other page says, and against carries the other end — where is that page's key as the briefing gives it (kind:id) and quote is its sentence, verbatim. A continuity note without against is not a continuity note and is dropped. A change over time is not a contradiction; a flat clash is. A page in the library is a reference a scene may reveal to be belief rather than fact; say so only when the clash has no such reading.
 - loose-end: a thing this page sets up, promises, or raises that nothing before it accounts for and that the writer may want to pay off — a named object, a threat, a question a character asks and nobody answers. message says what is set up and what is left open; suggestion says where or how it could be paid off. Not every unanswered line is a loose end; only what a reader would carry forward.
-- define: anything this page treats as part of the story that no page, scene, note, or variable describes, and this is the note that matters most. Check the roster and the world section first: a thing that has a page is never a define note, whatever the page is called. The message states what is the case, in this shape: "The Keepers are mentioned, but no lore page or note describes them." Never write that a thing wants, needs, deserves, or should have a page; a story has no wishes. Say what is missing, and the fix is the kind you give in defineAs. A person, a place, a region, a faction, a relic, a rite, a piece of history or world-building that a reader would expect to look up and the library has no page for: name it as written in name, and say in defineAs whether it should be a character, a place, or lore. An event this page tells or assumes that ought to be a scene of its own: defineAs scene, and name the scene. A body of world-building or backstory that deserves a note of its own: defineAs note, and name it. State this page implies that the story will want to test later and no variable tracks, an effect it plainly performs that the engine does not apply, a condition it plainly assumes: defineAs variable, and propose it (id in snake_case, type, initial, a one-line description in the writer's words) or give the effect as an expression the engine reads, e.g. "trust += 1", "mara_alive = false". Also a define note, on a scene only: a library character who is in the scene's prose but not in its characters field (give their key as the entity, defineAs character). Never on a note or a library page, which have no characters field. When the briefing shows the scenes and notes that name this page, read them for this page's subject too: a leader, a rite, a place, a faction those scenes treat as part of what this page is about and the story has no page for is a define note here, quoting the scene that names it. When the briefing lists things other reads already said the story lacks, connect them: if one of them belongs to this page's subject, say so in a define note rather than flagging it fresh. Judge by what the story would need, never by capital letters: "the swamp" and "port town" are places if the story keeps returning to them.
+- define: anything this page treats as part of the story that no page, scene, note, or variable describes, and this is the note that matters most. Check what the story has and the world section first: a thing that has a page is never a define note, whatever the page is called. The message states what is the case, in this shape: "The Keepers are mentioned, but no lore page or note describes them." Never write that a thing wants, needs, deserves, or should have a page; a story has no wishes. Say what is missing, and the fix is the kind you give in defineAs. A person, a place, a region, a faction, a relic, a rite, a piece of history or world-building that a reader would expect to look up and the library has no page for: name it as written in name, and say in defineAs whether it should be a character, a place, or lore. An event this page tells or assumes that ought to be a scene of its own: defineAs scene, and name the scene. A body of world-building or backstory that deserves a note of its own: defineAs note, and name it. State this page implies that the story will want to test later and no variable tracks, an effect it plainly performs that the engine does not apply, a condition it plainly assumes: defineAs variable, and propose it (id in snake_case, type, initial, a one-line description in the writer's words) or give the effect as an expression the engine reads, e.g. "trust += 1", "mara_alive = false". Also a define note, on a scene only: a library character who is in the scene's prose but not in its characters field (give their key as the entity, defineAs character). Never on a note or a library page, which have no characters field. When the briefing shows the scenes and notes that name this page, read them for this page's subject too: a leader, a rite, a place, a faction those scenes treat as part of what this page is about and the story has no page for is a define note here, quoting the scene that names it. When the briefing lists things other reads already said the story lacks, connect them: if one of them belongs to this page's subject, say so in a define note rather than flagging it fresh. Judge by what the story would need, never by capital letters: "the swamp" and "port town" are places if the story keeps returning to them.
 - other: anything an editor would flag that fits none of the above.
 
-Restraint is the rule: a handful of notes at most, each one you would stand behind, none you cannot quote. A page that is fine gets no notes. Name every thing by its key from the roster, exactly as given (kind:id). Answer with the JSON the schema asks for and nothing else.`
+Restraint is the rule: a handful of notes at most, each one you would stand behind, none you cannot quote. A page that is fine gets no notes. Name every thing by its key from the list of what the story has, exactly as given (kind:id). Answer with the JSON the schema asks for and nothing else.`
 
 const PAGE_BUDGET = 1400
 const NOTE_LIMIT = 6
 const NAMER_LIMIT = 6
+
+/** A page's opening sentence beside its name, so "Queen Ilsabet: the salt queen of Marrow Point" reads as one thing. */
+function firstSentence(body: string): string {
+  const first = body
+    .split(/\n\s*\n/)
+    .map((p) => p.replace(/^#+ +/, '').replace(/\s+/g, ' ').trim())
+    .find(Boolean)
+  if (!first) return ''
+  const end = first.search(/[.!?](\s|$)/)
+  const sentence = end > 0 ? first.slice(0, end + 1) : first
+  return sentence.length > 140 ? `${sentence.slice(0, 140).trimEnd()}…` : sentence
+}
 
 function clip(text: string, budget: number = PAGE_BUDGET): string {
   const trimmed = text.trim()
@@ -232,12 +244,13 @@ export function briefReadScene(story: Story, item: TargetKey, dict: Dictionary, 
   }
   if (missing.length) lines.push('# Things other reads said the story lacks', '', ...missing.slice(0, 20), '')
 
-  lines.push('# The roster (name things by these keys)', '')
+  lines.push('# What the story has (name things by these keys; each library page with the first line of its page)', '')
   const byKind = new Map<string, string[]>()
   for (const entity of story.references.values()) {
     const also = entity.aliases.length ? ` — also called ${entity.aliases.map((a) => `"${a}"`).join(', ')}` : ''
+    const gist = firstSentence(entity.body)
     const list = byKind.get(entity.kind) ?? []
-    list.push(`${entity.title} (${targetKey(entity)})${also}`)
+    list.push(`${entity.title} (${targetKey(entity)})${also}${gist ? `: ${gist}` : ''}`)
     byKind.set(entity.kind, list)
   }
   for (const [kind, list] of [...byKind.entries()].sort()) lines.push(`${kind}s: ${list.join('; ')}`)
@@ -290,12 +303,13 @@ export function readSceneRequest(story: Story, item: TargetKey, dict: Dictionary
 }
 
 /**
- * The read as the ledger keeps it: keys the roster does not have are
+ * The read as the ledger keeps it: keys the story does not have are
  * dropped, empty strings are dropped, a note of no known kind is
  * dropped, and the entry carries the hash of the text it was read from.
  */
 export function ledgerEntryFrom(output: ReadSceneOutput, text: string, dict: Dictionary, now: number = Date.now(), item?: TargetKey): LedgerEntry {
   const isScene = item === undefined || item.startsWith('scene:')
+  const drawn = findMentions(text, dict, item ? { self: item } : {})
   const known = (key: string) => dict.targets.has(key)
   const clean = (s: unknown) => (typeof s === 'string' ? s.trim() : '')
   const notes: EditorNote[] = []
@@ -343,9 +357,11 @@ export function ledgerEntryFrom(output: ReadSceneOutput, text: string, dict: Dic
     mentions: (output.mentions ?? [])
       .map((m) => ({ quote: clean(m.quote), entity: clean(m.entity) }))
       .filter((m) => m.quote && known(m.entity) && m.quote.split(/\s+/).length <= 6 && text.toLowerCase().includes(m.quote.toLowerCase())),
+    // A rejection only means something for a name the matcher actually
+    // drew for that thing; the rest is the model ruling out air.
     rejected: (output.rejected ?? [])
       .map((r) => ({ quote: clean(r.quote), candidate: clean(r.candidate), why: clean(r.why) }))
-      .filter((r) => r.quote && known(r.candidate)),
+      .filter((r) => r.quote && known(r.candidate) && drawn.some((span) => phraseKey(span.quote) === phraseKey(r.quote) && span.targets.some((t) => targetKey(t) === r.candidate))),
     developments: (output.developments ?? [])
       .map((d) => ({ entity: clean(d.entity), fact: clean(d.fact), quote: clean(d.quote) }))
       .filter((d) => d.fact && known(d.entity)),

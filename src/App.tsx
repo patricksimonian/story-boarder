@@ -700,7 +700,7 @@ export default function App({
       onOpen: (key) => void openTarget(key),
       onVerdict: (quote, entity) => void ruleOnMention(item, quote, entity),
       onCreate: (kind, title) => void defineThing(kind, title),
-      roster: () => [...dict.targets.values()].sort((a, b) => a.title.localeCompare(b.title)),
+      everything: () => [...dict.targets.values()].sort((a, b) => a.title.localeCompare(b.title)),
       onAlias: (key, alias) => void keepAsName(key, alias),
       suggestedKind: (quote) => ledger[item]?.notes?.find((n) => n.kind === 'define' && !n.entity && n.name && phraseKey(n.name) === phraseKey(quote))?.defineAs,
       imageUrl: async (path) => {
@@ -739,13 +739,6 @@ export default function App({
       summary,
       notes,
       developments: entry.developments.map((d) => ({ title: dict?.targets.get(d.entity)?.title ?? d.entity, fact: d.fact, quote: d.quote })),
-      // A writer's "it is" outranks the read's "it is not", and stays.
-      ruledOut: entry.rejected.map((r) => ({
-        quote: r.quote,
-        candidateTitle: dict?.targets.get(r.candidate)?.title ?? r.candidate,
-        why: r.why,
-        keep: () => void ruleOnMention(item, r.quote, r.candidate),
-      })),
     }
   }
 

@@ -153,3 +153,23 @@ Patrick's read of a note in Uyuni, the same evening: continuity notes that were 
 
 "1 name refused" said nothing about which name: the summary now says "ruled out", and the block under Read lists each one — the phrase, the thing the read says it is not here, its reason — with an "It is X" that keeps it after all as a writer's verdict. And Patrick's raven king: a loose-end note that "the raven king" refers to King Naviro was the read filing a mention under the wrong heading. The rubric now says a phrase that means a roster thing under another name is a mention with that key, never a note; unconfirmed mentions are drawn in orange like the unknowns; and the card on one offers the connections in his words — confirm it, keep the phrase as a name for the thing (an alias written onto the page from wherever the writer is), pick something else that exists from a searchable roster, create something new, or say it is nothing. The orange-name card gets the same picker.
 
+## Evals
+
+`pnpm eval:coach` runs the real reads against invented fixtures under `evals/` (never a writer's own story) with stated expectations, N times each, and reports a pass rate; it spends usage and never runs with `pnpm test`. First haiku baseline, 2026-09-08, ten runs per case:
+
+| expectation | haiku |
+|---|---|
+| Mara's Confession: defines the Warden | 10/10 |
+| Mara's Confession: a development about Mara | 9/10 |
+| Mara's Confession: does not define Mara, Rook, the Vault | 10/10 |
+| Salt queen: resolves "the salt queen" to Queen Ilsabet as a mention | 0/10 |
+| Salt queen: does not flag the salt queen as undefined | 10/10 |
+| Salt queen: defines the Drowned Choir | 10/10 |
+| Tide Bell: defines Brother Halvard (character) | 8/10 |
+| Tide Bell: defines the Glasswater marsh (place) | 7/10 |
+| Tide Bell: defines the Rite of Brine (lore) | 10/10 |
+| Tide Bell: proposes a variable for the bell or the closed crossing | 0/10 |
+| Tide Bell: does not define Teodor or Marrow Point | 10/10 |
+
+The two zeros are the same failure: a job buried in a field the model does not use. It knows the salt queen is Ilsabet (a loose-end note in run 4 says so, and it never defines her as missing) and never writes it under mentions; the mentions it does write are "what the page is about" ("the girl" → the note itself). And it never proposes a variable, though the scene says in words that a rung bell closes the crossing; the proposal is a clause inside the define paragraph. Missing characters, places, and lore, and the rule against defining what exists, are reliable.
+

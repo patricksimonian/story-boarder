@@ -124,8 +124,8 @@ describe('the scene read', () => {
 
     // The scene says what the read found, right under the button: the notes with their fixes, then the developments.
     const outcome = within(editor).getByRole('region', { name: 'Last read' })
-    expect(outcome).toHaveTextContent('Read just now: 3 editor’s notes, 2 things to define, 1 development, 1 phrase resolved, 1 name ruled out')
-    expect(within(outcome).getByRole('list', { name: 'Names ruled out' })).toHaveTextContent('Maara is not Mara here: a different word here')
+    expect(outcome).toHaveTextContent('Read just now: 3 editor’s notes, 2 things to define, 1 development, 1 phrase resolved')
+    expect(within(outcome).queryByRole('list', { name: 'Names ruled out' })).not.toBeInTheDocument()
     expect(outcome).toHaveTextContent('Mara Mara stops watching the door.')
     expect(outcome).toHaveTextContent('Why she watches doors is raised and not answered.')
     expect(outcome).toHaveTextContent('the cistern: mentioned, but no place page describes it.')

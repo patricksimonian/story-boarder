@@ -103,14 +103,17 @@ function entryFor(term: string, target: Target, certainty: Certainty, rank: Entr
  * The forms a title is also found in: without its article ("The Keepers"
  * is named as "Keepers"), and with its last word in the other number
  * ("the Keeper role" names The Keepers). Derived from the title, never
- * guessed, and only for names of two or more words or four or more
- * letters, so a short title does not turn every near word into itself.
+ * guessed. A bare form is made only when the title writes it as a name —
+ * "The Keepers" gives "Keepers", but "The seed" gives nothing, because
+ * "seed" in prose is a seed — and only for words of four or more letters,
+ * so a short title does not turn every near word into itself.
  */
 export function titleVariants(title: string): string[] {
   const out = new Set<string>()
   const trimmed = title.trim()
   const bare = trimmed.replace(/^(the|a|an)\s+/i, '')
-  for (const base of new Set([trimmed, bare])) {
+  const bareIsName = bare !== trimmed && /^\p{Lu}/u.test(bare)
+  for (const base of new Set([trimmed, ...(bare === trimmed || bareIsName ? [bare] : [])])) {
     if (!base) continue
     out.add(base)
     const words = base.split(/\s+/)

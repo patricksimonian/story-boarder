@@ -209,9 +209,9 @@ function MentionTip({
   }
   const one = cards.length === 1 ? cards[0] : undefined
   const name = tip.quote.replace(/['’]s?$/, '')
-  const picker = mentions.roster && (
+  const picker = mentions.everything && (
     <Picker
-      roster={mentions.roster()}
+      everything={mentions.everything()}
       onPick={(key) => {
         mentions.onVerdict(tip.quote, key)
         mentions.onAlias?.(key, name)
@@ -366,8 +366,8 @@ function MentionTip({
   )
 }
 
-/** "It is something that exists": a search over the roster, choosing one thing. */
-function Picker({ roster, onPick }: { roster: Target[]; onPick: (key: TargetKey) => void }) {
+/** "It is something that exists": a search over everything the story has, choosing one thing. */
+function Picker({ everything, onPick }: { everything: Target[]; onPick: (key: TargetKey) => void }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   if (!open) {
@@ -378,7 +378,7 @@ function Picker({ roster, onPick }: { roster: Target[]; onPick: (key: TargetKey)
     )
   }
   const q = query.trim().toLowerCase()
-  const hits = roster.filter((t) => !q || t.title.toLowerCase().includes(q) || t.id.includes(q)).slice(0, 8)
+  const hits = everything.filter((t) => !q || t.title.toLowerCase().includes(q) || t.id.includes(q)).slice(0, 8)
   return (
     <span className="mention-picker">
       <input autoFocus aria-label="Which thing" placeholder="type a name" value={query} onChange={(e) => setQuery(e.target.value)} />
