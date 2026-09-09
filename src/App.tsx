@@ -241,6 +241,7 @@ export default function App({
   const loadedRef = useRef<LoadedStory | null>(null)
   loadedRef.current = loaded
   const [reading, setReading] = useState<Set<TargetKey>>(new Set())
+  const readAborts = useRef<Map<TargetKey, AbortController>>(new Map())
   const [readProblem, setReadProblem] = useState<string | null>(null)
   // The coaching switch and the model live in story.json; the health
   // check behind the switch is what this machine says right now, run
@@ -821,9 +822,13 @@ export default function App({
     const dictNow = dictionary(story)
     const request = readSceneRequest(story, item, dictNow, ledgerRef.current, promptsRef.current.readScene)
     if (!request) return false
+    readAborts.current.get(item)?.abort()
+    const controller = new AbortController()
+    readAborts.current.set(item, controller)
+    opts.signal?.addEventListener('abort', () => controller.abort())
     setReading((set) => new Set(set).add(item))
     try {
-      const result = await run<ReadSceneOutput>(runner, request, { model: assistantSettings(story.manifest).model, signal: opts.signal })
+      const result = await run<ReadSceneOutput>(runner, request, { model: assistantSettings(story.manifest).model, signal: controller.signal })
       const next = { ...ledgerRef.current, [item]: ledgerEntryFrom(result.output, text, dictNow) }
       setLedger(next)
       store.save(folder.name, next)
@@ -832,15 +837,21 @@ export default function App({
       return true
     } catch (error) {
       if (error instanceof RunnerFailure && error.limit) setLimit(error.message)
-      else setReadProblem((error as Error).message)
+      else if (!(error instanceof RunnerFailure && error.message === 'Cancelled.')) setReadProblem((error as Error).message)
       return false
     } finally {
+      if (readAborts.current.get(item) === controller) readAborts.current.delete(item)
       setReading((set) => {
         const next = new Set(set)
         next.delete(item)
         return next
       })
     }
+  }
+
+  /** Stops the read of one item, the writer's call; nothing is recorded and nothing is said. */
+  function cancelRead(item: TargetKey): void {
+    readAborts.current.get(item)?.abort()
   }
 
   /** A read follows a save once typing has rested, when the story asks for that; only the latest save's read survives. */
@@ -1658,6 +1669,9 @@ export default function App({
             onRead={() => {
               if (noteItem) void readItem(noteItem, { force: true })
             }}
+            onCancelRead={() => {
+              if (noteItem) cancelRead(noteItem)
+            }}
           />
         )}
         {view.level === 'stats' && (
@@ -1709,6 +1723,9 @@ export default function App({
             read={readInfo(refItem)}
             onRead={() => {
               if (refItem) void readItem(refItem, { force: true })
+            }}
+            onCancelRead={() => {
+              if (refItem) cancelRead(refItem)
             }}
           />
         )}
@@ -1767,6 +1784,9 @@ export default function App({
           read={readInfo(sceneItem)}
           onRead={() => {
             if (sceneItem) void readItem(sceneItem, { force: true })
+          }}
+          onCancelRead={() => {
+            if (sceneItem) cancelRead(sceneItem)
           }}
         />
       )}

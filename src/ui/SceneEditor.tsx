@@ -5,6 +5,7 @@ import { insertBeat, moveBeat, removeBeat, setBeat } from '../editor/beats'
 import type { MentionContext } from '../mentions/context'
 import type { Target } from '../mentions/match'
 import { NamedIn } from './NamedIn'
+import { ReadButton } from './ReadButton'
 import { ReadOutcome, type ReadInfo } from './ReadOutcome'
 import type { Placement } from '../story/mutations'
 import { EngineEditor } from './EngineEditor'
@@ -38,6 +39,7 @@ export function SceneEditor({
   reading = false,
   readProblem = null,
   onRead,
+  onCancelRead,
   read = null,
 }: {
   story: Story
@@ -68,6 +70,7 @@ export function SceneEditor({
   readProblem?: string | null
   /** Sends this scene to the read now, whether or not it changed. */
   onRead?: () => void
+  onCancelRead?: () => void
   /** What the last read of this scene found. */
   read?: ReadInfo | null
 }) {
@@ -126,22 +129,8 @@ export function SceneEditor({
             <button className="ed-histbtn" onClick={() => void toggleHistory()}>
               History
             </button>
-            {onRead && (
-              <button
-                className="ed-histbtn"
-                disabled={!canRead || reading}
-                title="Sends this scene to Claude through your own Claude Code and records what it says about who is in it and what changes"
-                onClick={onRead}
-              >
-                {reading ? 'Reading…' : 'Read'}
-              </button>
-            )}
+            {onRead && <ReadButton what="scene" canRead={canRead} reading={reading} readProblem={readProblem} onRead={onRead} onCancel={onCancelRead} />}
             {scene.characters.length > 0 && <span className="ed-chips">👤 {scene.characters.join(', ')}</span>}
-            {readProblem && (
-              <span className="ed-readnote" role="alert">
-                {readProblem}
-              </span>
-            )}
           </div>
           {history && (
             <div className="ed-section ed-history">

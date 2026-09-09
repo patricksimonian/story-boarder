@@ -145,9 +145,14 @@ export function createAssistant({ spawn: spawnFn = spawnClaude, version = claude
       }
       const controller = new AbortController()
       if (typeof body.runId === 'string') runs.set(body.runId, controller)
+      const started = Date.now()
+      const model = body.argv[body.argv.indexOf('--model') + 1] ?? '?'
       try {
-        answer(200, await spawnFn(body.argv, body.stdin, { signal: controller.signal }))
+        const result = await spawnFn(body.argv, body.stdin, { signal: controller.signal })
+        log(`run ${model}: ${((Date.now() - started) / 1000).toFixed(1)}s, exit ${result.exitCode}${describe(result.stdout)}`)
+        answer(200, result)
       } catch (error) {
+        log(`run ${model}: ${((Date.now() - started) / 1000).toFixed(1)}s, failed: ${error.message}`)
         answer(500, { error: error.message })
       } finally {
         if (typeof body.runId === 'string') runs.delete(body.runId)
@@ -156,6 +161,24 @@ export function createAssistant({ spawn: spawnFn = spawnClaude, version = claude
     }
     answer(404, { error: 'No such route' })
   })
+}
+
+/** One line per run on the helper's terminal, so a slow read can be seen for what it is. */
+function log(line) {
+  if (process.env.NODE_ENV !== 'test' && !process.env.VITEST) console.log(`${new Date().toLocaleTimeString()}  ${line}`)
+}
+
+function describe(stdout) {
+  try {
+    const j = JSON.parse(stdout)
+    const parts = []
+    if (j.num_turns) parts.push(`${j.num_turns} turns`)
+    if (j.usage?.output_tokens) parts.push(`${j.usage.output_tokens} out tokens`)
+    if (j.is_error) parts.push(`error: ${String(j.result).slice(0, 80)}`)
+    return parts.length ? `, ${parts.join(', ')}` : ''
+  } catch {
+    return ''
+  }
 }
 
 function readBody(req) {

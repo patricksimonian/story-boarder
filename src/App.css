@@ -2865,3 +2865,13 @@ button.sb-pen:focus-visible {
   background: var(--card);
   cursor: pointer;
 }
+.read-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.read-elapsed {
+  font-variant-numeric: tabular-nums;
+}

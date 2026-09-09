@@ -3,6 +3,7 @@ import type { Note, Slug, Story, TargetKey } from '../domain/types'
 import type { MentionContext } from '../mentions/context'
 import type { Target } from '../mentions/match'
 import { NamedIn } from './NamedIn'
+import { ReadButton } from './ReadButton'
 import { ReadOutcome, type ReadInfo } from './ReadOutcome'
 import { ProseEditor } from './ProseEditor'
 
@@ -30,6 +31,7 @@ export function NotesView({
   reading = false,
   readProblem = null,
   onRead,
+  onCancelRead,
   read = null,
 }: {
   story: Story
@@ -47,6 +49,7 @@ export function NotesView({
   reading?: boolean
   readProblem?: string | null
   onRead?: () => void
+  onCancelRead?: () => void
   read?: ReadInfo | null
 }) {
   const [picked, setPicked] = useState<string | null>(null)
@@ -196,19 +199,7 @@ export function NotesView({
             </label>
             {onRead && (
               <div className="notes-readrow">
-                <button
-                  type="button"
-                  disabled={!canRead || reading}
-                  title="Sends this note to Claude through your own Claude Code and records what it says about who is in it and what changes"
-                  onClick={onRead}
-                >
-                  {reading ? 'Reading…' : 'Read'}
-                </button>
-                {readProblem && (
-                  <span className="ed-readnote" role="alert">
-                    {readProblem}
-                  </span>
-                )}
+                <ReadButton what="note" className="" canRead={canRead} reading={reading} readProblem={readProblem} onRead={onRead} onCancel={onCancelRead} />
               </div>
             )}
             <ReadOutcome read={read} />

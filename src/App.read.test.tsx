@@ -255,6 +255,31 @@ describe('the scene read', () => {
     await waitFor(() => expect(within(editor).getByRole('button', { name: 'Read' })).toBeEnabled())
   })
 
+  test('a read shows how long it has run and can be cancelled, which records nothing and says nothing', async () => {
+    const world = embersWorld()
+    await world.files.writeText('scenes/the-dry-cistern.md', CISTERN)
+    const runner = new StubProcessRunner()
+    const answerNormally = runner.spawnClaude.bind(runner)
+    // The read hangs until it is cancelled; the health check's ping still answers.
+    runner.spawnClaude = (argv, stdin, opts) =>
+      opts?.workflow === 'read-scene'
+        ? new Promise((resolve) => {
+            opts.signal?.addEventListener('abort', () => resolve({ stdout: '', stderr: '', exitCode: 143 }))
+          })
+        : answerNormally(argv, stdin, opts)
+    await openStory(world, runner)
+    const editor = await openCistern()
+    const read = await within(editor).findByRole('button', { name: 'Read' })
+    await waitFor(() => expect(read).toBeEnabled())
+    await userEvent.click(read)
+    const progress = await within(editor).findByRole('status', { name: 'Reading' })
+    expect(progress).toHaveTextContent(/\d+s/)
+    await userEvent.click(within(progress).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(within(editor).getByRole('button', { name: 'Read' })).toBeEnabled())
+    expect(within(editor).queryByRole('alert')).not.toBeInTheDocument()
+    expect(within(editor).queryByRole('region', { name: 'Last read' })).not.toBeInTheDocument()
+  })
+
   test('a read that fails says why beside the button', async () => {
     const world = embersWorld()
     await world.files.writeText('scenes/the-dry-cistern.md', CISTERN)

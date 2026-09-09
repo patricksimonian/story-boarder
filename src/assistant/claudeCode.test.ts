@@ -98,6 +98,23 @@ describe('run', () => {
     await expect(run(runner, request, { model: 'haiku' })).rejects.toThrow(new RunnerFailure('helper not running on port 7311'))
   })
 
+  test('a run that outlives its timeout is stopped and says so; a cancelled one says only that', async () => {
+    const runner = new StubProcessRunner()
+    let seen: AbortSignal | undefined
+    runner.spawnClaude = (_argv, _stdin, opts) =>
+      new Promise((resolve) => {
+        seen = opts?.signal
+        opts?.signal?.addEventListener('abort', () => resolve({ stdout: '', stderr: '', exitCode: 143 }))
+      })
+    await expect(run(runner, request, { model: 'haiku', timeoutMs: 20 })).rejects.toThrow('Claude Code took too long and was stopped.')
+    expect(seen?.aborted).toBe(true)
+
+    const controller = new AbortController()
+    const pending = run(runner, request, { model: 'haiku', signal: controller.signal })
+    controller.abort()
+    await expect(pending).rejects.toThrow('Cancelled.')
+  })
+
   test('an unanswered workflow in a test says so rather than pretending', async () => {
     await expect(run(new StubProcessRunner(), { ...request, workflow: 'nothing' }, { model: 'haiku' })).rejects.toThrow(/no canned answer for nothing/)
   })

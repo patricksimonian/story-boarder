@@ -4,6 +4,7 @@ import type { ReferenceEntity, ReferenceKind, Slug, Story, TargetKey } from '../
 import type { MentionContext } from '../mentions/context'
 import type { Target } from '../mentions/match'
 import { NamedIn } from './NamedIn'
+import { ReadButton } from './ReadButton'
 import { ReadOutcome, type ReadInfo } from './ReadOutcome'
 import { foldTag, tagIndex } from '../tags/canon'
 import { ChipsField } from './ChipsField'
@@ -41,6 +42,7 @@ export function LibraryView({
   reading = false,
   readProblem = null,
   onRead,
+  onCancelRead,
   read = null,
 }: {
   story: Story
@@ -66,6 +68,7 @@ export function LibraryView({
   readProblem?: string | null
   /** Sends this page to the read now: what its text names, and what it says. */
   onRead?: () => void
+  onCancelRead?: () => void
   read?: ReadInfo | null
 }) {
   const [picked, setPicked] = useState<ReferenceKind>('character')
@@ -187,19 +190,7 @@ export function LibraryView({
             />
             {onRead && (
               <div className="notes-readrow">
-                <button
-                  type="button"
-                  disabled={!canRead || reading}
-                  title="Sends this page to Claude through your own Claude Code and records what its text names and says"
-                  onClick={onRead}
-                >
-                  {reading ? 'Reading…' : 'Read'}
-                </button>
-                {readProblem && (
-                  <span className="ed-readnote" role="alert">
-                    {readProblem}
-                  </span>
-                )}
+                <ReadButton what="page" className="" canRead={canRead} reading={reading} readProblem={readProblem} onRead={onRead} onCancel={onCancelRead} />
               </div>
             )}
             <ReadOutcome read={read} />
