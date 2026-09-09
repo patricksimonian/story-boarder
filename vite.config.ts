@@ -3,6 +3,7 @@ import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { readFileSync } from 'node:fs'
 import { defineConfig } from 'vite'
+import { configDefaults } from 'vitest/config'
 
 // package.json is the one place the version lives: src-tauri/tauri.conf.json
 // points at it, the page gets it here, and the release workflow refuses a
@@ -24,6 +25,8 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/test-setup.ts'],
+    // The evals under evals/ spend Claude Code usage; they run only with `pnpm eval:coach`.
+    exclude: [...configDefaults.exclude, 'evals/**'],
     // The suite shares the machine with the app, a browser, and whatever
     // else is running; contention should slow tests, never fail them.
     testTimeout: 30000,

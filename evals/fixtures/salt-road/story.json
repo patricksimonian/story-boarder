@@ -1,0 +1,22 @@
+{
+  "title": "The Salt Road",
+  "acts": [
+    {
+      "id": "act-1",
+      "title": "Act I"
+    }
+  ],
+  "storylines": [
+    {
+      "id": "the-crossing",
+      "name": "The Crossing",
+      "color": "#5b6ee1",
+      "glyph": "\u25c6",
+      "scenes": [
+        "the-landing",
+        "the-tide-bell"
+      ]
+    }
+  ],
+  "settings": {}
+}

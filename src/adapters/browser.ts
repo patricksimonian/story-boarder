@@ -1,11 +1,14 @@
-import type {
-  FileAccess,
-  FolderChangeHandler,
-  FolderWatcher,
-  Journal,
-  JournalEntry,
-  OpenedFolder,
-  Platform,
+import {
+  readAuthJson,
+  type FileAccess,
+  type FolderChangeHandler,
+  type FolderWatcher,
+  type Journal,
+  type JournalEntry,
+  type OpenedFolder,
+  type Platform,
+  type ProcessResult,
+  type ProcessRunner,
 } from './types'
 
 /**
@@ -338,6 +341,110 @@ export function browserPlatform(): Platform {
     async rememberOpened(folder) {
       const handle = handles.get(folder)
       if (handle) await rememberFolder(folder.name, handle).catch(() => {})
+    },
+  }
+}
+
+export const HELPER_URL = 'http://127.0.0.1:7311'
+
+/** Reads the helper's line-per-JSON stream: `{line}` as they come, then `{done}` or `{error}`. */
+async function readLines(response: Response, onLine: (line: string) => void): Promise<{ done?: Partial<ProcessResult>; error?: string }> {
+  const outcome: { done?: Partial<ProcessResult>; error?: string } = {}
+  const take = (raw: string) => {
+    if (!raw.trim()) return
+    let parsed: { line?: string; done?: Partial<ProcessResult>; error?: string }
+    try {
+      parsed = JSON.parse(raw) as typeof parsed
+    } catch {
+      return
+    }
+    if (typeof parsed.line === 'string') onLine(parsed.line)
+    if (parsed.done) outcome.done = parsed.done
+    if (typeof parsed.error === 'string') outcome.error = parsed.error
+    // A helper from before the stream answers with the ending alone.
+    if (!parsed.line && !parsed.done && typeof (parsed as Partial<ProcessResult>).stdout === 'string') outcome.done = parsed as Partial<ProcessResult>
+  }
+  if (!response.body) {
+    for (const raw of (await response.text()).split(/\r?\n/)) take(raw)
+    return outcome
+  }
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffered = ''
+  for (;;) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffered += decoder.decode(value, { stream: true })
+    const parts = buffered.split(/\r?\n/)
+    buffered = parts.pop() ?? ''
+    for (const raw of parts) take(raw)
+  }
+  buffered += decoder.decode()
+  take(buffered)
+  return outcome
+}
+const HELPER_DOWN = 'The assistant helper is not running — in a terminal at the project, run pnpm assistant and leave it running.'
+const HELPER_OLD = 'The assistant helper is from an older build — stop it and run pnpm assistant again.'
+/** What this page expects the helper to speak; scripts/assistant.mjs carries the same number. */
+const HELPER_PROTOCOL = 2
+
+/**
+ * A page cannot spawn anything, so the browser build asks the helper in
+ * scripts/assistant.mjs to. The helper spawns claude and nothing else.
+ */
+export function helperRunner(base: string = HELPER_URL, fetchFn: typeof fetch = (...args) => fetch(...args)): ProcessRunner {
+  let counter = 0
+  return {
+    kind: 'browser',
+
+    async spawnClaude(argv, stdin, opts) {
+      const runId = `${Date.now()}-${++counter}`
+      const onAbort = () =>
+        void fetchFn(`${base}/cancel`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ runId }) }).catch(() => {})
+      opts?.signal?.addEventListener('abort', onAbort)
+      let response: Response
+      try {
+        response = await fetchFn(`${base}/spawn`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ argv, stdin, runId }),
+        })
+      } catch {
+        opts?.signal?.removeEventListener('abort', onAbort)
+        throw new Error(HELPER_DOWN)
+      }
+      try {
+        // The helper answers with one JSON object per line: the lines Claude
+        // Code prints as it prints them, then the ending.
+        const text = await readLines(response, (line) => opts?.onLine?.(line))
+        const ending = text.done ?? {}
+        if (text.error) throw new Error(text.error)
+        if (!response.ok || typeof ending.stdout !== 'string') throw new Error(text.error ?? `The assistant helper answered ${response.status}.`)
+        return { stdout: ending.stdout, stderr: ending.stderr ?? '', exitCode: ending.exitCode ?? -1 }
+      } finally {
+        opts?.signal?.removeEventListener('abort', onAbort)
+      }
+    },
+
+    async status() {
+      try {
+        const body = (await (await fetchFn(`${base}/status`)).json()) as { version?: string; error?: string; protocol?: number }
+        if (body.protocol !== HELPER_PROTOCOL) return { kind: 'unavailable', reason: HELPER_OLD }
+        if (body.version) return { kind: 'ready', detail: `Claude Code ${body.version}` }
+        return { kind: 'unavailable', reason: body.error ?? 'The assistant helper found no Claude Code.' }
+      } catch {
+        return { kind: 'unavailable', reason: HELPER_DOWN }
+      }
+    },
+
+    async auth() {
+      try {
+        const body = (await (await fetchFn(`${base}/auth`)).json()) as { json?: string; error?: string }
+        if (typeof body.json === 'string') return readAuthJson(body.json)
+        return { kind: 'unknown', reason: body.error ?? 'the assistant helper could not ask' }
+      } catch {
+        return { kind: 'unknown', reason: HELPER_DOWN }
+      }
     },
   }
 }

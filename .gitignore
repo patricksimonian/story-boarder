@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# eval runs spend usage and are local to the machine
+evals/results

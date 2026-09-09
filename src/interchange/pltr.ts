@@ -181,7 +181,7 @@ function writeReferences(
     taken.add(slug)
     slugs.set(entity.id, slug)
     const body = [slateText(entity.description), slateText(entity.notes)].filter(Boolean).join('\n\n')
-    files[`${dir}/${slug}.md`] = serializeReferenceFile({ kind, id: slug, title: entityTitle, tags: [], images: [], body })
+    files[`${dir}/${slug}.md`] = serializeReferenceFile({ kind, id: slug, title: entityTitle, tags: [], images: [], aliases: [], body })
   }
   return slugs
 }

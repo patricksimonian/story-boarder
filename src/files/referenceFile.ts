@@ -30,6 +30,11 @@ export function parseReferenceFile(kind: ReferenceKind, slug: Slug, text: string
     problems.push('`images` must be a list of strings')
   }
 
+  const aliases = fm.aliases ?? []
+  if (!Array.isArray(aliases) || aliases.some((a) => typeof a !== 'string')) {
+    problems.push('`aliases` must be a list of strings')
+  }
+
   const title = readTitle(split.body)
   if (title === undefined) problems.push('Body has no `# Title` heading')
 
@@ -37,7 +42,15 @@ export function parseReferenceFile(kind: ReferenceKind, slug: Slug, text: string
   const body = split.body.replace(/^# +.+$/m, '').trim()
   return {
     ok: true,
-    entity: { kind, id: slug, title: title as string, tags: tags as string[], images: images as string[], body },
+    entity: {
+      kind,
+      id: slug,
+      title: title as string,
+      tags: tags as string[],
+      images: images as string[],
+      aliases: (aliases as string[]).map((a) => a.trim()).filter(Boolean),
+      body,
+    },
   }
 }
 
@@ -45,6 +58,12 @@ export function parseReferenceFile(kind: ReferenceKind, slug: Slug, text: string
 export function serializeReferenceFile(entity: ReferenceEntity): string {
   const tagLine = entity.tags.length ? `\ntags: [${entity.tags.join(', ')}]` : ''
   const imageLine = entity.images.length ? `\nimages: [${entity.images.join(', ')}]` : ''
+  const aliasLine = entity.aliases.length ? `\naliases: [${entity.aliases.map(quoteAlias).join(', ')}]` : ''
   const body = entity.body === '' ? '' : `\n\n${entity.body}`
-  return `---\nid: ${entity.id}${tagLine}${imageLine}\n---\n\n# ${entity.title}${body}\n`
+  return `---\nid: ${entity.id}${tagLine}${imageLine}${aliasLine}\n---\n\n# ${entity.title}${body}\n`
+}
+
+/** An alias is prose ("the smith", "Rook of Tanner's Row"), so it is quoted whenever YAML would read it otherwise. */
+function quoteAlias(alias: string): string {
+  return /^[A-Za-z0-9][A-Za-z0-9 _-]*[A-Za-z0-9]$/.test(alias) ? alias : JSON.stringify(alias)
 }

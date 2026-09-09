@@ -53,11 +53,16 @@ Version: `package.json` is the only place it lives (Tauri reads it from there; t
 
 Release: publish a GitHub release and `.github/workflows/release.yml` builds and attaches the installer, signed through SignPath once the `SIGNPATH_*` repository variables and `SIGNPATH_API_TOKEN` secret exist. Run the workflow by hand with a tag to attach a build to an existing release.
 
+## To activate coaching
+
+The coach runs through the Claude Code you have installed and signed into. Install Claude Code and sign in, then open Settings (the cog at the bottom of the navigation) and switch Coaching on. A health check runs there and on every open while it is on: Claude Code found, signed in, and answering through the model you pick. On the desktop, that is all. In a browser, run `pnpm assistant` at the project and leave it running first; the check says so if it is not. The prompts the reads and checks use are files under `coach/` in the story folder, editable in Settings or anywhere else.
+
+With it on, prose that names a character, place, lore page, note, scene, or variable lights up in every editor; hover a name for its page and where else it is named, or to rule on what a phrase means. A read, from the Read button or after each save if you switch that on, is an editor's pass over the page against the library, the notebook, and the scenes before it: it records what the page says about who is in it and what changes, and leaves notes — a clash with the world, a loose end, state the engine should track, anything the page treats as part of the story that has no page, scene, note, or variable yet. Those last are drawn in orange in the prose; the card on one creates the thing in a click, or says it is nothing. The Coach view keeps the log, and a continuity check walks a storyline through it and reports what cannot all be true, in Analysis. The mention pipeline works without Claude Code; the reads and checks need it.
+
+### Evals for the coach
+
+The reads are a model's judgement, so they are measured rather than assumed. `pnpm eval:coach` runs the real reads, through your own Claude Code, against the fixtures under `evals/` with stated expectations — the Warden has no page, "the raven king" is King Naviro — three times each, and reports a pass rate per expectation; an expectation passes at two of three. It spends your usage, so it never runs with `pnpm test`. `EVAL_RUNS`, `EVAL_MODEL`, and `EVAL_ONLY` narrow it; the last run's answers land in `evals/results/last-run.json`. When a read misses something on your own story, the fixture that reproduces it belongs there.
 
 ## To Dos
 
-- syntax highlighting in prose for cross referencing prose to notes/library/variables etc 
-    - A workflow processes prose and matches with known themes/titles in library/notes/scenes
-    - an ai workflow (like haiku) if predicts whether a token best matches a character, a lore item, a place for example
-    - a user can hover and click, a tool tip opens up with context on the connection and allows the user to navigate to the context. 
-- on the dynamic coaching, is not only variable prediction/settings/guidance within a scene, also continouty checking, and a logging of developments such as events, character changes, etc. This allows the user to make sure their story is consistent without loopholes, errors in contionuty, or contradictions.
+- nothing queued: the model coach of issue 11 (state worth tracking, structure) landed as the editor's notes in the read, and missing references land as orange names.

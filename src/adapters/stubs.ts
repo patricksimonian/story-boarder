@@ -4,11 +4,16 @@
  */
 
 import type {
+  AuthStatus,
   FileAccess,
   FolderChangeHandler,
   FolderWatcher,
   Journal,
   JournalEntry,
+  ProcessResult,
+  ProcessRunner,
+  RunnerStatus,
+  SpawnOptions,
 } from './types'
 
 /**
@@ -110,5 +115,67 @@ export class ManualWatcher implements FolderWatcher {
 
   fire(paths: string[]): void {
     for (const handler of this.handlers) handler(paths)
+  }
+}
+
+type Canned = ProcessResult | ((stdin: string) => ProcessResult)
+
+/**
+ * A process runner that never spawns: it answers each workflow by name
+ * with what a test canned for it, and records every argv and stdin so
+ * a test can assert the briefing that reached Claude Code.
+ */
+export class StubProcessRunner implements ProcessRunner {
+  kind: 'desktop' | 'browser' = 'desktop'
+  calls: { workflow?: string; argv: string[]; stdin: string }[] = []
+  private canned = new Map<string, Canned>()
+
+  statusValue: RunnerStatus
+  authValue: AuthStatus = { kind: 'signed-in', account: 'writer@example.com', plan: 'max' }
+
+  constructor(status: RunnerStatus = { kind: 'ready', detail: 'Claude Code 2.1.215' }) {
+    this.statusValue = status
+  }
+
+  /** The raw process ending for a workflow. */
+  answer(workflow: string, result: Canned): void {
+    this.canned.set(workflow, result)
+  }
+
+  /** A successful run: the structured output Claude Code would have printed. */
+  answerWith<T>(workflow: string, output: T | ((stdin: string) => T)): void {
+    const wrap = (value: T): ProcessResult => ({
+      stdout: JSON.stringify({ type: 'result', subtype: 'success', result: JSON.stringify(value), structured_output: value }),
+      stderr: '',
+      exitCode: 0,
+    })
+    this.answer(workflow, typeof output === 'function' ? (stdin: string) => wrap((output as (s: string) => T)(stdin)) : wrap(output))
+  }
+
+  async spawnClaude(argv: string[], stdin: string, opts?: SpawnOptions): Promise<ProcessResult> {
+    this.calls.push({ workflow: opts?.workflow, argv, stdin })
+    const canned = this.canned.get(opts?.workflow ?? '')
+    const result = await this.ending(canned, stdin, opts)
+    // What a real spawner does: every line of stdout, as it is printed.
+    if (opts?.onLine) for (const line of result.stdout.split(/\r?\n/)) if (line.trim()) opts.onLine(line)
+    return result
+  }
+
+  private async ending(canned: Canned | undefined, stdin: string, opts?: SpawnOptions): Promise<ProcessResult> {
+    if (!canned && opts?.workflow === 'ping') {
+      // The health check pings; a stub answers it unless a test says otherwise.
+      const echo = stdin.replace(/^Story title: /, '')
+      return { stdout: JSON.stringify({ type: 'result', subtype: 'success', result: JSON.stringify({ echo }), structured_output: { echo } }), stderr: '', exitCode: 0 }
+    }
+    if (!canned) return { stdout: '', stderr: `no canned answer for ${opts?.workflow ?? 'this workflow'}`, exitCode: 1 }
+    return typeof canned === 'function' ? canned(stdin) : canned
+  }
+
+  async status(): Promise<RunnerStatus> {
+    return this.statusValue
+  }
+
+  async auth(): Promise<AuthStatus> {
+    return this.authValue
   }
 }

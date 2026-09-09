@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 // App.css is pulled in by index.css, inside Tailwind's components layer.
-import type { OpenedFolder, Platform } from './adapters/types'
-import type { Note, Playthrough, ReferenceEntity, ReferenceKind, Scene, Slug, StoryManifest, VariableRegistry } from './domain/types'
+import type { OpenedFolder, Platform, ProcessRunner } from './adapters/types'
+import type { Note, Playthrough, ReferenceEntity, ReferenceKind, Scene, Slug, StoryManifest, TargetKey, Variable, VariableRegistry } from './domain/types'
 import { analyse } from './engine/analyse'
 import { parseNoteFile, serializeNoteFile } from './files/noteFile'
 import { parseReferenceFile, serializeReferenceFile } from './files/referenceFile'
@@ -14,6 +14,17 @@ import { exportPlayable, type ExportResult } from './interchange/export'
 import { importToFiles } from './interchange/import'
 import { applySuggestion, type LiftSuggestion } from './interchange/lift'
 import runtimeJs from './player/runtime.generated.js?raw'
+import { aliasProposals, developmentLines, developmentsFor, hashText, localLedgerStore, modelUnknowns, modelVerdicts, readSummary, storyOrder, type DefineKind, type EditorNote, type Ledger, type LedgerStore } from './assistant/ledger'
+import { continuityRequest, findingsFrom, type ContinuityFinding, type ContinuityOutput } from './assistant/continuity'
+import { checkHealth, type Health } from './assistant/health'
+import { ledgerEntryFrom, readSceneRequest, type ReadSceneOutput } from './assistant/readScene'
+import { run } from './assistant/runner'
+import { RunnerFailure, type Progress } from './assistant/claudeCode'
+import { assistantSettings, DEFAULT_PROMPTS, loadPrompts, savePrompts, withAssistant, type AssistantSettings, type Prompts } from './assistant/settings'
+import type { MentionContext } from './mentions/context'
+import { describeTarget } from './mentions/describe'
+import { dictionary, findMentions, itemText, mentionIndex, type Target } from './mentions/match'
+import { MENTIONS_PATH, parseTargetKey, phraseKey, serializeVerdicts, targetKey, withVerdict } from './mentions/verdicts'
 import { readSceneFromHash, readViewFromHash, viewToHash, type View } from './state/view'
 import { loadStory, type LoadedStory } from './story/loadStory'
 import { applyTemplate } from './story/templates'
@@ -24,6 +35,7 @@ import {
   addNotebookSection,
   createAct,
   createNote,
+  addAlias,
   createReference,
   createScene,
   createStoryline,
@@ -44,6 +56,7 @@ import {
   setSyncRemote,
   setWordGoal,
   updateStoryline,
+  writeManifest,
   type Placement,
 } from './story/mutations'
 import { EditActDialog, EditStorylineDialog, type Editing } from './ui/StructureDialogs'
@@ -59,6 +72,7 @@ import { ImportDialog, LiftDialog } from './ui/ImportDialogs'
 import { PullDialog, SyncView, type SyncSettings } from './ui/SyncView'
 import { NewActDialog, NewSceneDialog, NewStorylineDialog, type Creating } from './ui/CreateDialog'
 import { Minimap } from './ui/Minimap'
+import { mimeOf } from './ui/images'
 import { LibraryView } from './ui/LibraryView'
 import { NotesView } from './ui/NotesView'
 import { Overview } from './ui/Overview'
@@ -67,6 +81,8 @@ import { ProblemsBar } from './ui/ProblemsBar'
 import { RawEditor } from './ui/RawEditor'
 import { SceneEditor } from './ui/SceneEditor'
 import { SearchView } from './ui/SearchView'
+import { SettingsView } from './ui/SettingsView'
+import type { ReadInfo, ReadNote } from './ui/ReadOutcome'
 import { SimulateView } from './ui/SimulateView'
 import { StatsView } from './ui/StatsView'
 import { Sidebar } from './ui/Sidebar'
@@ -138,11 +154,20 @@ const referencePath = (kind: ReferenceKind, id: Slug) => `${referenceDir(kind)}/
 
 export default function App({
   platform,
+  runner,
+  ledgerStore,
+  readIdleMs = 4000,
   autosaveDelayMs = 1000,
   boundaryIdleMs = 180000,
   makeRemote = (spot: GitHubSpot) => gitHubRemote(spot),
 }: {
   platform: Platform
+  /** How the writer's own Claude Code gets spawned; absent where nothing can spawn it. */
+  runner?: ProcessRunner
+  /** Where the development ledger is kept between sessions; the page's own storage unless a test says otherwise. */
+  ledgerStore?: LedgerStore
+  /** How long after a save the scene read follows. */
+  readIdleMs?: number
   /** How long typing pauses before the disk follows. */
   autosaveDelayMs?: number
   /** How long the folder rests before an idle boundary commit. */
@@ -202,7 +227,84 @@ export default function App({
     setRefDraftState(next)
   }
   const refSaveTimer = useRef<number | undefined>(undefined)
+
+  // The development ledger: what the scene read said about each item,
+  // kept by content hash outside the story folder. Reads run one at a
+  // time after a save, from the Read button, or in sequence for the
+  // whole story from the Coach view.
+  const store = useMemo(() => ledgerStore ?? localLedgerStore(), [ledgerStore])
+  const [ledger, setLedgerState] = useState<Ledger>({})
+  const ledgerRef = useRef<Ledger>({})
+  const setLedger = (next: Ledger) => {
+    ledgerRef.current = next
+    setLedgerState(next)
+  }
+  const loadedRef = useRef<LoadedStory | null>(null)
+  loadedRef.current = loaded
+  const [reading, setReading] = useState<Set<TargetKey>>(new Set())
+  const readAborts = useRef<Map<TargetKey, AbortController>>(new Map())
+  /** What each read in flight is doing, and when it began — so a page reopened mid-read picks up where the count was. */
+  const [readProgress, setReadProgress] = useState<Record<TargetKey, Progress & { startedAt: number }>>({})
+  /** Why the last read of a page failed, per page; a failure on one page is not news on another. */
+  const [readProblems, setReadProblems] = useState<Record<TargetKey, string>>({})
+  const setReadProblem = (item: TargetKey | null, message: string | null) =>
+    setReadProblems((all) => {
+      const next = { ...all }
+      if (item === null) return message === null ? {} : all
+      if (message === null) delete next[item]
+      else next[item] = message
+      return next
+    })
+  /** The problem the Coach view shows: the latest one, whatever page it was on. */
+  const readProblem = Object.values(readProblems).at(-1) ?? null
+  // The coaching switch and the model live in story.json; the health
+  // check behind the switch is what this machine says right now, run
+  // when the switch goes on and at every open while it is on.
+  const assistant: AssistantSettings = useMemo(
+    () => (loaded ? assistantSettings(loaded.story.manifest) : { enabled: false, model: 'haiku', autoRead: false }),
+    [loaded],
+  )
+  const [health, setHealth] = useState<Health>({ kind: 'idle' })
+  const [prompts, setPromptsState] = useState<Prompts>(DEFAULT_PROMPTS)
+  const promptsRef = useRef<Prompts>(DEFAULT_PROMPTS)
+  const setPrompts = (next: Prompts) => {
+    promptsRef.current = next
+    setPromptsState(next)
+  }
+  // Claude Code's session limit: one standing notice, and nothing model-
+  // shaped runs until the writer dismisses it or a later run gets through.
+  const [limit, setLimitState] = useState<string | null>(null)
+  const limitRef = useRef<string | null>(null)
+  const setLimit = (next: string | null) => {
+    limitRef.current = next
+    setLimitState(next)
+  }
+  const coachingOn = assistant.enabled && health.kind === 'passed' && limit === null
+  const [readingAll, setReadingAll] = useState<{ done: number; total: number } | null>(null)
+  const readAllAbort = useRef<AbortController | null>(null)
+  const readTimer = useRef<number | undefined>(undefined)
+  const [dismissedAliases, setDismissedAliases] = useState<Set<string>>(new Set())
+  // Continuity findings are pending state like every suggestion: kept
+  // until dismissed or the story is left, never written anywhere.
+  const [continuity, setContinuity] = useState<ContinuityFinding[]>([])
+  const [checking, setChecking] = useState<{ storyline: Slug; done: number; total: number } | null>(null)
+  const checkAbort = useRef<AbortController | null>(null)
+  useEffect(() => () => clearTimeout(readTimer.current), [])
   const findings = useMemo(() => (loaded ? analyse(loaded.story) : []), [loaded])
+  // Everything the story names, and everywhere it is named: what the
+  // prose editors draw mentions from. Rebuilt when the story reloads.
+  const dict = useMemo(() => (loaded ? dictionary(loaded.story) : null), [loaded])
+  const index = useMemo(() => (loaded && dict ? mentionIndex(loaded.story, dict) : null), [loaded, dict])
+  const sceneItem = draft ? targetKey({ kind: 'scene', id: draft.scene.id }) : null
+  const noteItem = noteDraft ? targetKey({ kind: 'note', id: noteDraft.note.id }) : null
+  const refItem = refDraft ? targetKey(refDraft.entity) : null
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- mentionsFor reads only dict, index, the ledger, and the loaded story
+  const sceneMentions = useMemo(() => (sceneItem ? mentionsFor(sceneItem) : undefined), [sceneItem, dict, index, ledger])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const noteMentions = useMemo(() => (noteItem ? mentionsFor(noteItem) : undefined), [noteItem, dict, index, ledger])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const refMentions = useMemo(() => (refItem ? mentionsFor(refItem) : undefined), [refItem, dict, index, ledger])
+  const proposals = useMemo(() => (loaded ? aliasProposals(ledger, loaded.story) : new Map<TargetKey, string[]>()), [ledger, loaded])
   const git = useMemo(() => (folder ? folderGit(folder.files) : null), [folder])
   /** Conflicts found at launch, shown one at a time. */
   const queuedConflicts = useRef<JournalConflict[]>([])
@@ -581,6 +683,356 @@ export default function App({
     await reload(folder)
   }
 
+  /**
+   * What a prose editor needs to draw mentions for one item and answer
+   * for them: the finder over the story's names with this item's own
+   * verdicts, the card behind each name, and the two things the tooltip
+   * can do — go there, or rule on the phrase.
+   */
+  function mentionsFor(item: TargetKey): MentionContext | undefined {
+    if (!loaded || !dict || !index) return undefined
+    const { story } = loaded
+    const verdicts = [...(story.verdicts[item] ?? []), ...modelVerdicts(ledger[item])]
+    const unknowns = modelUnknowns(ledger[item])
+    return {
+      find: (text) => findMentions(text, dict, { self: item, verdicts, unknowns }),
+      describe: (key) => describeTarget(story, key, item, index, developmentLines(ledger, story, key, item), developmentsFor(ledger, story, key)),
+      onOpen: (key) => void openTarget(key),
+      onVerdict: (quote, entity) => void ruleOnMention(item, quote, entity),
+      onCreate: (kind, title) => void defineThing(kind, title),
+      everything: () => [...dict.targets.values()].sort((a, b) => a.title.localeCompare(b.title)),
+      onAlias: (key, alias) => void keepAsName(key, alias),
+      suggestedKind: (quote) => ledger[item]?.notes?.find((n) => n.kind === 'define' && !n.entity && n.name && phraseKey(n.name) === phraseKey(quote))?.defineAs,
+      imageUrl: async (path) => {
+        if (!folder) return null
+        try {
+          const bytes = await folder.files.readBinary(path)
+          return URL.createObjectURL(new Blob([bytes.slice().buffer], { type: mimeOf(path) }))
+        } catch {
+          return null
+        }
+      },
+    }
+  }
+
+  /** What the last read of an item found, for the page it was pressed on, with the fixes the app can apply. */
+  function readInfo(item: TargetKey | null): ReadInfo | null {
+    if (!item || !loaded) return null
+    const entry = ledger[item]
+    const summary = readSummary(entry)
+    if (!entry || !summary) return null
+    const { story } = loaded
+    const parsed = parseTargetKey(item)
+    const scene = parsed?.kind === 'scene' ? story.scenes.get(parsed.id) : undefined
+    const notes: ReadNote[] = (entry.notes ?? []).map((note) => {
+      const shown: ReadNote = { ...note }
+      if (note.entity) shown.entityTitle = dict?.targets.get(note.entity)?.title
+      if (note.kind === 'define') {
+        const done = defineDone(note, scene)
+        if (done) shown.done = done
+        else shown.action = defineAction(note, scene) ?? undefined
+      }
+      if (note.against) {
+        const target = dict?.targets.get(note.against.where)
+        shown.againstTitle = target?.title ?? note.against.where
+        if (target) shown.openAgainst = () => void openTarget(note.against!.where)
+      }
+      return shown
+    })
+    return {
+      summary,
+      notes,
+      developments: entry.developments.map((d) => ({ title: dict?.targets.get(d.entity)?.title ?? d.entity, fact: d.fact, quote: d.quote })),
+    }
+  }
+
+  /**
+   * A define note whose fix is in the story now — by the button or by
+   * hand — reads from the story, not from memory of the click: the
+   * registry has the variable, the scene lists the character, or a page
+   * the matcher resolves the name to exists.
+   */
+  function defineDone(note: EditorNote, scene: Scene | undefined): ReadNote['done'] | undefined {
+    const current = loadedRef.current
+    if (!current || !dict) return undefined
+    const { story } = current
+    if (note.defineAs === 'variable' && note.variable) {
+      const id = note.variable.id
+      if (!story.registry.variables.some((v) => v.id === id)) return undefined
+      return { headline: `${note.name ?? id}: tracked by the variable ${id}.`, title: id, open: () => void openTarget(`variable:${id}`) }
+    }
+    if (note.entity) {
+      const known = parseTargetKey(note.entity)
+      const listed = draftRef.current?.scene.id === scene?.id ? draftRef.current?.scene : scene
+      if (known?.kind !== 'character' || !listed?.characters.includes(known.id)) return undefined
+      const title = dict.targets.get(note.entity)?.title ?? known.id
+      return { headline: `${title} is listed on the scene.`, title, open: () => void openTarget(note.entity!) }
+    }
+    if (!note.name || !note.defineAs) return undefined
+    const wanted = note.defineAs
+    const target = findMentions(note.name, dict)
+      .filter((span) => span.certainty === 'certain')
+      .flatMap((span) => span.targets)
+      .find((t) => t.kind === wanted) ?? findMentions(note.name, dict).find((span) => span.certainty === 'certain')?.targets[0]
+    if (!target) return undefined
+    const noun = target.kind === 'scene' || target.kind === 'note' ? target.kind : `${target.kind} page`
+    return { headline: `${note.name}: a ${noun} describes it now.`, title: target.title, open: () => void openTarget(targetKey(target)) }
+  }
+
+  /** The one-click fix for a define note: declare the variable, add the character to the scene, or create the thing. */
+  function defineAction(note: EditorNote, scene: Scene | undefined): ReadNote['action'] | null {
+    const current = loadedRef.current
+    if (!current) return null
+    const { story } = current
+    if (note.defineAs === 'variable' && note.variable) {
+      const proposal = note.variable
+      if (story.registry.variables.some((v) => v.id === proposal.id)) return null
+      return { label: `Declare ${proposal.id}`, run: () => void declareVariable(proposal) }
+    }
+    if (note.entity) {
+      const known = parseTargetKey(note.entity)
+      if (known?.kind === 'character' && scene && !scene.characters.includes(known.id)) {
+        return { label: `Add ${dict?.targets.get(note.entity)?.title ?? known.id} to the scene`, run: () => addCharacterToScene(known.id) }
+      }
+      return null
+    }
+    if (!note.name || !note.defineAs || note.defineAs === 'variable') return null
+    const name = note.name
+    const kind = note.defineAs
+    const noun = kind === 'lore' ? 'lore page' : kind
+    return { label: `Create ${kind === 'note' || kind === 'scene' ? 'a' : kind === 'lore' ? 'a' : 'a'} ${noun} for ${name}`, run: () => void defineThing(kind, name) }
+  }
+
+  /** A phrase kept as a name for a page: written onto the page, so the matcher finds it from then on. */
+  async function keepAsName(key: TargetKey, alias: string): Promise<void> {
+    const parsed = parseTargetKey(key)
+    if (!folder || !parsed || !['character', 'place', 'lore'].includes(parsed.kind)) return
+    const open = refDraftRef.current
+    if (open && open.entity.kind === parsed.kind && open.entity.id === parsed.id) {
+      if (!open.entity.aliases.some((a) => a.toLowerCase() === alias.toLowerCase())) editReference({ ...open.entity, aliases: [...open.entity.aliases, alias] })
+      return
+    }
+    await addAlias(folder.files, parsed.kind as ReferenceKind, parsed.id, alias)
+    await reload(folder)
+  }
+
+  /** Creates the thing a define note or an orange name asks for, without leaving the page the writer is on. */
+  async function defineThing(kind: DefineKind, title: string): Promise<void> {
+    if (!folder || kind === 'variable') return
+    if (kind === 'scene') await createScene(folder.files, { title, storylines: [] })
+    else if (kind === 'note') await createNote(folder.files, title)
+    else await createReference(folder.files, kind, title)
+    await reload(folder)
+  }
+
+  /** A proposed variable, declared through the ordinary registry save — as if typed in the Variables view. */
+  async function declareVariable(proposal: NonNullable<ReadNote['variable']>): Promise<void> {
+    const current = loadedRef.current
+    if (!folder || !current || current.story.registry.variables.some((v) => v.id === proposal.id)) return
+    let variable: Variable
+    if (proposal.type === 'boolean') variable = { id: proposal.id, type: 'boolean', initial: proposal.initial === 'true' }
+    else if (proposal.type === 'number') variable = { id: proposal.id, type: 'number', initial: Number(proposal.initial) || 0 }
+    else {
+      const values = proposal.initial.split(/[,|/]/).map((v) => v.trim()).filter(Boolean)
+      variable = { id: proposal.id, type: 'enum', values: values.length ? values : ['unset'], initial: values[0] ?? 'unset' }
+    }
+    if (proposal.description) variable.description = proposal.description
+    await writeEngine(() => saveRegistry(folder.files, { variables: [...current.story.registry.variables, variable] }))
+  }
+
+  /** A library character the read found on the open scene, listed on it — the same edit typing the field would make. */
+  function addCharacterToScene(id: Slug): void {
+    const current = draftRef.current
+    if (!current || current.scene.characters.includes(id)) return
+    editScene({ ...current.scene, characters: [...current.scene.characters, id] })
+  }
+
+  /** Everywhere an item is named, most often first: the reverse of a mention, shown on the page itself. */
+  function namedIn(item: TargetKey | null): Target[] {
+    if (!item || !index) return []
+    return [...(index.get(item) ?? [])].sort((a, b) => b.count - a.count || a.item.title.localeCompare(b.item.title)).map((site) => site.item)
+  }
+
+  /** Goes to the thing a mention names: a scene in the editor, a page in its view. */
+  async function openTarget(key: TargetKey): Promise<void> {
+    const parsed = parseTargetKey(key)
+    if (!parsed) return
+    if (parsed.kind === 'scene') return openScene(parsed.id)
+    if (draftRef.current) closeScene()
+    if (parsed.kind === 'note') {
+      setView({ level: 'notes' })
+      await selectNote(parsed.id)
+    } else if (parsed.kind === 'variable') {
+      setView({ level: 'variables' })
+    } else {
+      setView({ level: 'library' })
+      await selectReference(parsed.kind as ReferenceKind, parsed.id)
+    }
+  }
+
+  /** The writer's ruling on a phrase lands in mentions.json; the editors redraw from the reload. */
+  async function ruleOnMention(item: TargetKey, quote: string, entity: TargetKey | null): Promise<void> {
+    if (!folder || !loaded) return
+    const next = withVerdict(loaded.story.verdicts, item, { quote, entity, by: 'writer' })
+    await folder.files.writeText(MENTIONS_PATH, serializeVerdicts(next))
+    await reload(folder)
+  }
+
+  /**
+   * One scene read. Skipped when the ledger already holds a read of this
+   * exact text, unless the writer pressed the button; a failure is a
+   * sentence beside the button and in the Coach view, never a crash.
+   */
+  async function readItem(item: TargetKey, opts: { force?: boolean; signal?: AbortSignal } = {}): Promise<boolean> {
+    const current = loadedRef.current
+    if (!runner || !folder || !current) return false
+    const { story } = current
+    const text = itemText(story, item)
+    if (text === undefined) return false
+    if (!opts.force && ledgerRef.current[item]?.hash === hashText(text)) return false
+    const dictNow = dictionary(story)
+    const request = readSceneRequest(story, item, dictNow, ledgerRef.current, promptsRef.current.readScene)
+    if (!request) return false
+    readAborts.current.get(item)?.abort()
+    const controller = new AbortController()
+    readAborts.current.set(item, controller)
+    opts.signal?.addEventListener('abort', () => controller.abort())
+    setReading((set) => new Set(set).add(item))
+    const startedAt = Date.now()
+    setReadProgress((all) => ({ ...all, [item]: { phase: 'starting', chars: 0, startedAt } }))
+    setReadProblem(item, null)
+    try {
+      const result = await run<ReadSceneOutput>(runner, request, {
+        model: assistantSettings(story.manifest).model,
+        signal: controller.signal,
+        onProgress: (progress) => setReadProgress((all) => ({ ...all, [item]: { ...progress, startedAt } })),
+      })
+      const next = { ...ledgerRef.current, [item]: ledgerEntryFrom(result.output, text, dictNow, Date.now(), item) }
+      setLedger(next)
+      store.save(folder.name, next)
+      setLimit(null)
+      return true
+    } catch (error) {
+      if (error instanceof RunnerFailure && error.limit) setLimit(error.message)
+      else if (!(error instanceof RunnerFailure && error.message === 'Cancelled.')) setReadProblem(item, (error as Error).message)
+      return false
+    } finally {
+      if (readAborts.current.get(item) === controller) readAborts.current.delete(item)
+      setReadProgress((all) => {
+        const next = { ...all }
+        delete next[item]
+        return next
+      })
+      setReading((set) => {
+        const next = new Set(set)
+        next.delete(item)
+        return next
+      })
+    }
+  }
+
+  /** Stops the read of one item, the writer's call; nothing is recorded and nothing is said. */
+  function cancelRead(item: TargetKey): void {
+    readAborts.current.get(item)?.abort()
+  }
+
+  /** A read follows a save once typing has rested, when the story asks for that; only the latest save's read survives. */
+  function scheduleRead(item: TargetKey): void {
+    if (!runner || !coachingOn || !assistant.autoRead) return
+    clearTimeout(readTimer.current)
+    readTimer.current = window.setTimeout(() => void readItem(item), readIdleMs)
+  }
+
+  /** Every item in story order, one call each, skipping what the ledger already holds; Cancel stops after the current one. */
+  async function readEverything(): Promise<void> {
+    const current = loadedRef.current
+    if (!current || !runner) return
+    const items = storyOrder(current.story).map(targetKey)
+    const controller = new AbortController()
+    readAllAbort.current = controller
+    setReadingAll({ done: 0, total: items.length })
+    for (let i = 0; i < items.length; i++) {
+      if (controller.signal.aborted || limitRef.current !== null) break
+      await readItem(items[i], { signal: controller.signal })
+      setReadingAll({ done: i + 1, total: items.length })
+    }
+    readAllAbort.current = null
+    setReadingAll(null)
+  }
+
+  /**
+   * The continuity check for one storyline: the ledger in lane order goes
+   * to the large tier, and what comes back replaces that lane's findings.
+   */
+  async function checkStoryline(id: Slug, signal?: AbortSignal): Promise<void> {
+    const current = loadedRef.current
+    if (!runner || !current) return
+    const request = continuityRequest(current.story, id, ledgerRef.current, promptsRef.current.checkContinuity)
+    if (!request) return
+    try {
+      const result = await run<ContinuityOutput>(runner, request, { model: assistantSettings(current.story.manifest).model, signal })
+      const found = findingsFrom(result.output, current.story, id)
+      setContinuity((list) => [...list.filter((f) => f.storyline !== id), ...found])
+      setReadProblem(`storyline:${id}`, null)
+      setLimit(null)
+    } catch (error) {
+      if (error instanceof RunnerFailure && error.limit) setLimit(error.message)
+      else setReadProblem(`storyline:${id}`, (error as Error).message)
+    }
+  }
+
+  /** Every storyline in order, one call each; Cancel stops after the current one. */
+  async function checkEverything(only?: Slug): Promise<void> {
+    const current = loadedRef.current
+    if (!current || !runner) return
+    const lanes = current.story.manifest.storylines.filter((s) => only === undefined || s.id === only)
+    const controller = new AbortController()
+    checkAbort.current = controller
+    for (let i = 0; i < lanes.length; i++) {
+      if (controller.signal.aborted || limitRef.current !== null) break
+      setChecking({ storyline: lanes[i].id, done: i, total: lanes.length })
+      await checkStoryline(lanes[i].id, controller.signal)
+    }
+    checkAbort.current = null
+    setChecking(null)
+  }
+
+  /** The health check: Claude Code found, signed in, and answering through the chosen model. */
+  async function runHealth(model: string): Promise<void> {
+    setHealth({ kind: 'checking' })
+    const result = await checkHealth(runner, model, loadedRef.current?.story.manifest.title ?? '')
+    setHealth(result)
+  }
+
+  /** The Story pane's save: the title and the whole settings object, as edited. */
+  async function saveStorySettings(title: string, settings: StoryManifest['settings']): Promise<void> {
+    const current = loadedRef.current
+    if (!folder || !current) return
+    await writeManifest(folder.files, { ...current.story.manifest, title, settings })
+    await reload(folder)
+  }
+
+  /** The Claude pane's save: the switch and the model into story.json, the prompts into their files; then the check, if on. */
+  async function saveAssistant(next: AssistantSettings, nextPrompts: Prompts): Promise<void> {
+    const current = loadedRef.current
+    if (!folder || !current) return
+    await writeManifest(folder.files, withAssistant(current.story.manifest, next))
+    await savePrompts(folder.files, nextPrompts)
+    setPrompts(await loadPrompts(folder.files))
+    await reload(folder)
+    if (next.enabled) {
+      if (health.kind !== 'passed' || next.model !== assistant.model) await runHealth(next.model)
+    } else {
+      setHealth({ kind: 'idle' })
+    }
+  }
+
+  /** The alias proposals for a library page, less the ones the writer waved away this session. */
+  function proposalsFor(entity: ReferenceEntity): string[] {
+    const key = targetKey(entity)
+    return (proposals.get(key) ?? []).filter((alias) => !dismissedAliases.has(`${key}|${phraseKey(alias)}`))
+  }
+
   /** Opens a notebook page, flushing whatever page was open first. */
   async function selectNote(id: Slug): Promise<void> {
     if (!folder) return
@@ -628,6 +1080,7 @@ export default function App({
     }
     await folder.journal.clear(notePath(current.note.id))
     await reload(folder)
+    scheduleRead(targetKey({ kind: 'note', id: current.note.id }))
   }
 
   /** Opens a library page, flushing whatever page was open first. */
@@ -678,6 +1131,7 @@ export default function App({
     }
     await folder.journal.clear(path)
     await reload(folder)
+    scheduleRead(targetKey(current.entity))
   }
 
   async function createReferenceAction(kind: ReferenceKind, title: string): Promise<void> {
@@ -789,7 +1243,13 @@ export default function App({
     setStartError(null)
     setFolder(opened)
     setLoaded(result.loaded)
+    setLedger(store.load(opened.name))
+    setReadProblem(null, null)
+    setPrompts(await loadPrompts(opened.files))
     const { manifest, scenes } = result.loaded.story
+    const coaching = assistantSettings(manifest)
+    setHealth({ kind: 'idle' })
+    if (coaching.enabled) void runHealth(coaching.model)
     const initialView = readViewFromHash(location.hash, (id: Slug) => manifest.acts.some((a) => a.id === id))
     setViewState(initialView)
     const sceneId = readSceneFromHash(location.hash, (id) => scenes.has(id))
@@ -823,6 +1283,15 @@ export default function App({
     setRefDraft(null)
     setRawEdit(null)
     setConflict(null)
+    clearTimeout(readTimer.current)
+    readAllAbort.current?.abort()
+    checkAbort.current?.abort()
+    setLedger({})
+    setContinuity([])
+    setReadProblem(null, null)
+    setHealth({ kind: 'idle' })
+    setLimit(null)
+    setPrompts(DEFAULT_PROMPTS)
     queuedConflicts.current = []
     setCreating(null)
     setEditing(null)
@@ -916,6 +1385,7 @@ export default function App({
     }
     await folder.journal.clear(current.path)
     await reload(folder)
+    scheduleRead(targetKey({ kind: 'scene', id: current.scene.id }))
   }
 
   /**
@@ -1164,7 +1634,7 @@ export default function App({
         variableCount={story.registry.variables.length}
         noteCount={story.notes.size}
         referenceCount={story.references.size}
-        findingCount={findings.length}
+        findingCount={findings.length + continuity.length}
       >
         <div className="sb-sect">New</div>
         <button className="sb-item" onClick={() => setCreating('scene')}>
@@ -1187,6 +1657,16 @@ export default function App({
           problems={problems}
           onEdit={(problem) => void openRawEditor(problem.path, problem.message)}
         />
+        {limit && (
+          <div className="limit-bar" role="status" aria-label="Claude Code limit">
+            <span className="limit-token">Claude Code limit</span>
+            <span>{limit}</span>
+            <span className="limit-hint">Reads and checks wait until it lifts.</span>
+            <button type="button" onClick={() => setLimit(null)}>
+              Dismiss
+            </button>
+          </div>
+        )}
         {view.level === 'storylines' && (
           <Board
             story={story}
@@ -1208,7 +1688,25 @@ export default function App({
           <ActView story={story} actId={view.act} onView={setView} onOpenScene={onOpenScene} />
         )}
         {view.level === 'graph' && <GraphView story={story} onOpenScene={onOpenScene} />}
-        {view.level === 'coach' && <CoachView story={story} />}
+        {view.level === 'coach' && (
+          <CoachView
+            story={story}
+            coachingOn={coachingOn}
+            onView={setView}
+            ledger={ledger}
+            titleOf={(key) => dict?.targets.get(key)?.title}
+            onOpenScene={onOpenScene}
+            onReadAll={() => void readEverything()}
+            onCancelReadAll={() => readAllAbort.current?.abort()}
+            readingAll={readingAll}
+            readProblem={readProblem}
+            continuityCount={continuity.length}
+            onCheck={(id) => void checkEverything(id)}
+            onCheckAll={() => void checkEverything()}
+            onCancelCheck={() => checkAbort.current?.abort()}
+            checking={checking}
+          />
+        )}
         {view.level === 'variables' && (
           <VariablesView
             story={story}
@@ -1224,7 +1722,15 @@ export default function App({
             onDeletePlaythrough={(name) => void writeEngine(() => deletePlaythrough(folder.files, name))}
           />
         )}
-        {view.level === 'analysis' && <AnalysisView story={story} findings={findings} onOpenScene={onOpenScene} />}
+        {view.level === 'analysis' && (
+          <AnalysisView
+            story={story}
+            findings={findings}
+            continuity={continuity}
+            onDismissContinuity={(id) => setContinuity((list) => list.filter((f) => f.id !== id))}
+            onOpenScene={onOpenScene}
+          />
+        )}
         {view.level === 'history' && git && <HistoryView git={git} />}
         {view.level === 'notes' && (
           <NotesView
@@ -1235,6 +1741,20 @@ export default function App({
             onCreateSection={(path) => void createSectionAction(path)}
             onEdit={editNote}
             onDelete={() => void deleteNoteAction()}
+            mentions={noteMentions}
+            namedIn={namedIn(noteItem)}
+            onOpenTarget={(key) => void openTarget(key)}
+            canRead={coachingOn}
+            reading={noteItem !== null && reading.has(noteItem)}
+            progress={noteItem !== null ? readProgress[noteItem] : undefined}
+            readProblem={noteItem !== null ? (readProblems[noteItem] ?? null) : null}
+            read={readInfo(noteItem)}
+            onRead={() => {
+              if (noteItem) void readItem(noteItem, { force: true })
+            }}
+            onCancelRead={() => {
+              if (noteItem) cancelRead(noteItem)
+            }}
           />
         )}
         {view.level === 'stats' && (
@@ -1268,6 +1788,29 @@ export default function App({
             onEdit={editReference}
             onAddImages={(picked) => void addImagesToReference(picked)}
             onDelete={() => void deleteReferenceAction()}
+            mentions={refMentions}
+            namedIn={namedIn(refItem)}
+            onOpenTarget={(key) => void openTarget(key)}
+            aliasProposals={refDraft ? proposalsFor(refDraft.entity) : []}
+            onAcceptAlias={(alias) => {
+              const current = refDraftRef.current
+              if (current) editReference({ ...current.entity, aliases: [...current.entity.aliases, alias] })
+            }}
+            onDismissAlias={(alias) => {
+              const current = refDraftRef.current
+              if (current) setDismissedAliases((set) => new Set(set).add(`${targetKey(current.entity)}|${phraseKey(alias)}`))
+            }}
+            canRead={coachingOn}
+            reading={refItem !== null && reading.has(refItem)}
+            progress={refItem !== null ? readProgress[refItem] : undefined}
+            readProblem={refItem !== null ? (readProblems[refItem] ?? null) : null}
+            read={readInfo(refItem)}
+            onRead={() => {
+              if (refItem) void readItem(refItem, { force: true })
+            }}
+            onCancelRead={() => {
+              if (refItem) cancelRead(refItem)
+            }}
           />
         )}
         {view.level === 'sync' && (
@@ -1276,6 +1819,18 @@ export default function App({
             token={localStorage.getItem(TOKEN_KEY) ?? ''}
             status={syncStatus}
             onSave={(spot) => void saveSync(spot)}
+          />
+        )}
+        {view.level === 'settings' && (
+          <SettingsView
+            manifest={story.manifest}
+            onSaveStory={(title, settings) => void saveStorySettings(title, settings)}
+            assistant={assistant}
+            prompts={prompts}
+            health={health}
+            onCheck={(model) => void runHealth(model)}
+            onSaveAssistant={(next, nextPrompts) => void saveAssistant(next, nextPrompts)}
+            runnerKind={runner?.kind ?? 'none'}
           />
         )}
       </main>
@@ -1304,6 +1859,20 @@ export default function App({
           git={git}
           onRestore={(text) => void restoreSceneVersion(text)}
           onAddImages={(picked) => void addImagesToScene(picked)}
+          mentions={sceneMentions}
+          namedIn={namedIn(sceneItem)}
+          onOpenTarget={(key) => void openTarget(key)}
+          canRead={coachingOn}
+          reading={sceneItem !== null && reading.has(sceneItem)}
+          progress={sceneItem !== null ? readProgress[sceneItem] : undefined}
+          readProblem={sceneItem !== null ? (readProblems[sceneItem] ?? null) : null}
+          read={readInfo(sceneItem)}
+          onRead={() => {
+            if (sceneItem) void readItem(sceneItem, { force: true })
+          }}
+          onCancelRead={() => {
+            if (sceneItem) cancelRead(sceneItem)
+          }}
         />
       )}
       {rawEdit && (

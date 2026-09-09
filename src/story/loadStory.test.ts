@@ -78,4 +78,19 @@ describe('loadStory', () => {
     const flagged = result.loaded.problems.find((p) => p.path === 'story.json')
     expect(flagged?.raw).toBe('{ not json')
   })
+
+  test('mentions.json is read as verdicts; a broken one is flagged and the story still opens', async () => {
+    await files.writeText('mentions.json', '{"scene:cold-open": [{"quote": "Rook", "entity": null}]}')
+    const result = await loadStory(files)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.loaded.story.verdicts).toEqual({ 'scene:cold-open': [{ quote: 'Rook', entity: null, by: 'writer' }] })
+
+    await files.writeText('mentions.json', '[1]')
+    const again = await loadStory(files)
+    expect(again.ok).toBe(true)
+    if (!again.ok) return
+    expect(again.loaded.story.verdicts).toEqual({})
+    expect(again.loaded.problems.find((p) => p.path === 'mentions.json')?.raw).toBe('[1]')
+  })
 })

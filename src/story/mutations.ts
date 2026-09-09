@@ -2,7 +2,7 @@ import type { FileAccess } from '../adapters/types'
 import type { Note, Playthrough, ReferenceKind, Scene, Slug, Storyline, StoryManifest, VariableRegistry } from '../domain/types'
 import { parseManifestFile } from '../files/manifestFile'
 import { serializeNoteFile } from '../files/noteFile'
-import { serializeReferenceFile } from '../files/referenceFile'
+import { parseReferenceFile, serializeReferenceFile } from '../files/referenceFile'
 import { parseSceneFile, serializeSceneFile } from '../files/sceneFile'
 
 /**
@@ -51,8 +51,18 @@ export async function createReference(files: FileAccess, kind: ReferenceKind, ti
   const dir = referenceDir(kind)
   const existing = new Set((await files.list(dir)).map((p) => p.slice(dir.length + 1).replace(/\.md$/, '')))
   const id = slugify(title, (s) => existing.has(s))
-  await files.writeText(`${dir}/${id}.md`, serializeReferenceFile({ kind, id, title, tags: [], images: [], body: '' }))
+  await files.writeText(`${dir}/${id}.md`, serializeReferenceFile({ kind, id, title, tags: [], images: [], aliases: [], body: '' }))
   return id
+}
+
+/** Adds a name the prose uses for a page to that page's aliases — the same edit the page's own field makes. */
+export async function addAlias(files: FileAccess, kind: ReferenceKind, id: Slug, alias: string): Promise<void> {
+  const path = `${referenceDir(kind)}/${id}.md`
+  const parsed = parseReferenceFile(kind, id, await files.readText(path))
+  if (!parsed.ok) return
+  const trimmed = alias.trim()
+  if (!trimmed || parsed.entity.aliases.some((a) => a.toLowerCase() === trimmed.toLowerCase()) || parsed.entity.title.toLowerCase() === trimmed.toLowerCase()) return
+  await files.writeText(path, serializeReferenceFile({ ...parsed.entity, aliases: [...parsed.entity.aliases, trimmed] }))
 }
 
 /** Removes a reference entity's file. A scene citing it keeps the citation as written — the loader flags it. */

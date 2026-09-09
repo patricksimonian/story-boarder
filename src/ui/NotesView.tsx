@@ -1,5 +1,11 @@
 import { useState } from 'react'
-import type { Note, Slug, Story } from '../domain/types'
+import type { Note, Slug, Story, TargetKey } from '../domain/types'
+import type { MentionContext } from '../mentions/context'
+import type { Target } from '../mentions/match'
+import { NamedIn } from './NamedIn'
+import type { Progress } from '../assistant/claudeCode'
+import { ReadButton } from './ReadButton'
+import { ReadOutcome, type ReadInfo } from './ReadOutcome'
 import { ProseEditor } from './ProseEditor'
 
 /**
@@ -19,6 +25,16 @@ export function NotesView({
   onCreateSection,
   onEdit,
   onDelete,
+  mentions,
+  namedIn = [],
+  onOpenTarget = () => { },
+  canRead = false,
+  reading = false,
+  progress,
+  readProblem = null,
+  onRead,
+  onCancelRead,
+  read = null,
 }: {
   story: Story
   /** The open note as the draft holds it, or null when none is open. */
@@ -28,6 +44,16 @@ export function NotesView({
   onCreateSection: (path: string) => void
   onEdit: (note: Note) => void
   onDelete: () => void
+  mentions?: MentionContext
+  namedIn?: Target[]
+  onOpenTarget?: (key: TargetKey) => void
+  canRead?: boolean
+  reading?: boolean
+  progress?: (Progress & { startedAt: number }) | undefined
+  readProblem?: string | null
+  onRead?: () => void
+  onCancelRead?: () => void
+  read?: ReadInfo | null
 }) {
   const [picked, setPicked] = useState<string | null>(null)
   const [naming, setNaming] = useState<'note' | 'section' | null>(null)
@@ -105,7 +131,6 @@ export function NotesView({
     <section className="hist-wrap" role="region" aria-label="Notes">
       <div className="view-bar">
         <h2>Notes</h2>
-        <span className="view-sub">folders and pages — pick a section, and new things land inside it</span>
       </div>
       <div className="notes-split">
         <div className="notes-list">
@@ -175,11 +200,19 @@ export function NotesView({
                 ))}
               </select>
             </label>
+            {onRead && (
+              <div className="notes-readrow">
+                <ReadButton what="note" progress={progress} className="" canRead={canRead} reading={reading} readProblem={readProblem} onRead={onRead} onCancel={onCancelRead} />
+              </div>
+            )}
+            <ReadOutcome read={read} />
             <ProseEditor
               key={selected.id}
               markdown={selected.body}
               onChange={(body) => onEdit({ ...selected, body })}
+              mentions={mentions}
             />
+            <NamedIn items={namedIn} onOpen={onOpenTarget} />
             <div className="ed-section danger-zone">
               {!confirmingDelete ? (
                 <button type="button" className="danger-link" onClick={() => setConfirmingDelete(true)}>

@@ -148,7 +148,7 @@ export function Sidebar({
         className={`sb-item ${view.level === 'variables' ? 'active' : ''}`}
         onClick={() => onView({ level: 'variables' })}
       >
-        ⚙ Variables ({variableCount})
+        𝑥 Variables ({variableCount})
       </button>
       <button
         className={`sb-item ${view.level === 'simulate' ? 'active' : ''}`}
@@ -189,6 +189,13 @@ export function Sidebar({
         <br />
         <span className="opacity-70">Story Boarder v{__APP_VERSION__}</span>
       </div>
+      <button
+        className={`sb-item sb-settings ${view.level === 'settings' ? 'active' : ''}`}
+        title="The story's settings, and Claude Code"
+        onClick={() => onView({ level: 'settings' })}
+      >
+        ⚙ Settings
+      </button>
     </aside>
   )
 }

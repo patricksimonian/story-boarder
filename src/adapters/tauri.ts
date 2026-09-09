@@ -2,12 +2,15 @@ import { invoke, isTauri } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { IdbJournal } from './browser'
-import type {
-  FileAccess,
-  FolderChangeHandler,
-  FolderWatcher,
-  OpenedFolder,
-  Platform,
+import {
+  readAuthJson,
+  type FileAccess,
+  type FolderChangeHandler,
+  type FolderWatcher,
+  type OpenedFolder,
+  type Platform,
+  type ProcessResult,
+  type ProcessRunner,
 } from './types'
 
 /**
@@ -192,6 +195,51 @@ export function tauriPlatform(): Platform {
       return () => {
         stopped = true
         void unlisten.then((off) => off())
+      }
+    },
+  }
+}
+
+/**
+ * The desktop's way to Claude Code: the shell finds the binary the way
+ * `where` does, spawns it with the app's data directory as its working
+ * directory, and kills it on cancel.
+ */
+export function tauriRunner(): ProcessRunner {
+  let counter = 0
+  return {
+    kind: 'desktop',
+
+    async spawnClaude(argv, stdin, opts) {
+      const runId = `${Date.now()}-${++counter}`
+      const onAbort = () => void invoke('cancel_claude', { runId }).catch(() => {})
+      opts?.signal?.addEventListener('abort', onAbort)
+      const stop = opts?.onLine
+        ? await listen<{ runId: string; line: string }>('claude-line', (event) => {
+            if (event.payload.runId === runId) opts.onLine?.(event.payload.line)
+          })
+        : undefined
+      try {
+        return await call<ProcessResult>('spawn_claude', { runId, argv, stdin })
+      } finally {
+        opts?.signal?.removeEventListener('abort', onAbort)
+        stop?.()
+      }
+    },
+
+    async status() {
+      try {
+        return { kind: 'ready', detail: await call<string>('claude_status') }
+      } catch (error) {
+        return { kind: 'unavailable', reason: (error as Error).message }
+      }
+    },
+
+    async auth() {
+      try {
+        return readAuthJson(await call<string>('claude_auth'))
+      } catch (error) {
+        return { kind: 'unknown', reason: (error as Error).message }
       }
     },
   }

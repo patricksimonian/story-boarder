@@ -1,33 +1,16 @@
 import { useState } from 'react'
 import type { FileAccess } from '../adapters/types'
-import type { ReferenceEntity, ReferenceKind, Slug, Story } from '../domain/types'
+import type { ReferenceEntity, ReferenceKind, Slug, Story, TargetKey } from '../domain/types'
+import type { MentionContext } from '../mentions/context'
+import type { Target } from '../mentions/match'
+import { NamedIn } from './NamedIn'
+import type { Progress } from '../assistant/claudeCode'
+import { ReadButton } from './ReadButton'
+import { ReadOutcome, type ReadInfo } from './ReadOutcome'
+import { foldTag, tagIndex } from '../tags/canon'
+import { ChipsField } from './ChipsField'
 import { MoodBoard } from './MoodBoard'
 import { ProseEditor } from './ProseEditor'
-
-/** Tags are one comma-separated field, held as local text so a comma being typed isn't normalized away. */
-function TagsField({ entity, onEdit }: { entity: ReferenceEntity; onEdit: (entity: ReferenceEntity) => void }) {
-  const [text, setText] = useState(entity.tags.join(', '))
-  return (
-    <label className="notes-sectrow">
-      Tags
-      <input
-        aria-label="Tags"
-        placeholder="comma, separated"
-        value={text}
-        onChange={(e) => {
-          setText(e.target.value)
-          onEdit({
-            ...entity,
-            tags: e.target.value
-              .split(',')
-              .map((t) => t.trim())
-              .filter(Boolean),
-          })
-        }}
-      />
-    </label>
-  )
-}
 
 const KINDS: { kind: ReferenceKind; label: string; one: string }[] = [
   { kind: 'character', label: 'Characters', one: 'character' },
@@ -50,6 +33,19 @@ export function LibraryView({
   onEdit,
   onAddImages,
   onDelete,
+  mentions,
+  namedIn = [],
+  onOpenTarget = () => { },
+  aliasProposals = [],
+  onAcceptAlias = () => { },
+  onDismissAlias = () => { },
+  canRead = false,
+  reading = false,
+  progress,
+  readProblem = null,
+  onRead,
+  onCancelRead,
+  read = null,
 }: {
   story: Story
   files: FileAccess
@@ -61,6 +57,22 @@ export function LibraryView({
   /** Stores the picked files under assets/ and pins them to the open page. */
   onAddImages: (picked: File[]) => void
   onDelete: () => void
+  mentions?: MentionContext
+  /** Everywhere the open page is named, most often first. */
+  namedIn?: Target[]
+  onOpenTarget?: (key: TargetKey) => void
+  /** Phrases the scene read found naming the open page in more than one place. */
+  aliasProposals?: string[]
+  onAcceptAlias?: (alias: string) => void
+  onDismissAlias?: (alias: string) => void
+  canRead?: boolean
+  reading?: boolean
+  progress?: (Progress & { startedAt: number }) | undefined
+  readProblem?: string | null
+  /** Sends this page to the read now: what its text names, and what it says. */
+  onRead?: () => void
+  onCancelRead?: () => void
+  read?: ReadInfo | null
 }) {
   const [picked, setPicked] = useState<ReferenceKind>('character')
   const [naming, setNaming] = useState(false)
@@ -85,7 +97,7 @@ export function LibraryView({
     <section className="hist-wrap" role="region" aria-label="Library">
       <div className="view-bar">
         <h2>Library</h2>
-        <span className="view-sub">characters, places, and lore — pick a shelf, and new pages land on it</span>
+        <span className="view-sub">characters, places, and lore</span>
       </div>
       <div className="notes-split">
         <div className="notes-list">
@@ -154,12 +166,44 @@ export function LibraryView({
               value={selected.title}
               onChange={(e) => onEdit({ ...selected, title: e.target.value })}
             />
-            <TagsField key={`tags-${selected.kind}/${selected.id}`} entity={selected} onEdit={onEdit} />
+            <ChipsField
+              key={`tags-${selected.kind}/${selected.id}`}
+              label="Tags"
+              name="Tags"
+              noun="tag"
+              values={selected.tags}
+              onChange={(tags) => onEdit({ ...selected, tags })}
+              placeholder="type one, press Enter"
+              normalize={(value) => foldTag(value, tagIndex(story).map((row) => row.tag))}
+              suggestions={tagIndex(story).map((row) => row.tag)}
+            />
+            <ChipsField
+              key={`aliases-${selected.kind}/${selected.id}`}
+              label="Also called"
+              name="Aliases"
+              noun="alias"
+              values={selected.aliases}
+              onChange={(aliases) => onEdit({ ...selected, aliases })}
+              placeholder="the smith, the old man"
+              title="Other names the prose uses for this; each one lights up as a mention"
+              proposals={aliasProposals}
+              onAccept={onAcceptAlias}
+              onDismiss={onDismissAlias}
+              proposalHint="The scene read found this phrase naming this page in more than one place"
+            />
+            {onRead && (
+              <div className="notes-readrow">
+                <ReadButton what="page" progress={progress} className="" canRead={canRead} reading={reading} readProblem={readProblem} onRead={onRead} onCancel={onCancelRead} />
+              </div>
+            )}
+            <ReadOutcome read={read} />
             <ProseEditor
               key={`${selected.kind}/${selected.id}`}
               markdown={selected.body}
               onChange={(body) => onEdit({ ...selected, body })}
+              mentions={mentions}
             />
+            <NamedIn items={namedIn} onOpen={onOpenTarget} />
             <MoodBoard
               images={selected.images}
               files={files}

@@ -15,13 +15,14 @@ export type View =
   | { level: 'search' }
   | { level: 'stats' }
   | { level: 'coach' }
+  | { level: 'settings' }
   | { level: 'act'; act: Slug }
 
 type Flat = Exclude<View, { level: 'act' }>['level']
-const FLAT: Flat[] = ['storylines', 'overview', 'graph', 'variables', 'simulate', 'analysis', 'history', 'sync', 'notes', 'library', 'search', 'stats', 'coach']
+const FLAT: Flat[] = ['storylines', 'overview', 'graph', 'variables', 'simulate', 'analysis', 'history', 'sync', 'notes', 'library', 'search', 'stats', 'coach', 'settings']
 
 export function readViewFromHash(hash: string, isAct: (id: Slug) => boolean): View {
-  const match = hash.match(/view=(storylines|overview|graph|variables|simulate|analysis|history|sync|notes|library|search|stats|coach|act:([a-z0-9-]+))/)
+  const match = hash.match(/view=(storylines|overview|graph|variables|simulate|analysis|history|sync|notes|library|search|stats|coach|settings|act:([a-z0-9-]+))/)
   if (!match) return { level: 'storylines' }
   if (match[2]) return isAct(match[2]) ? { level: 'act', act: match[2] } : { level: 'storylines' }
   return { level: FLAT.find((f) => f === match[1]) ?? 'storylines' }

@@ -1,5 +1,6 @@
 import { Editor } from '@tiptap/core'
 import { describe, expect, test } from 'vitest'
+import { mentionsKey } from './mentions'
 import { proseExtensions, readProse } from './prose'
 
 /** The prose seam: what goes into the editor from the file, and what comes back out. */
@@ -31,5 +32,26 @@ describe('prose survives the trip through the editor', () => {
   test('dialogue lines and lists keep their shape', () => {
     const prose = '"Go," said Mara.\n\n- the ledger\n- the key\n\n> Nobody leaves.'
     expect(roundTrip(prose)).toBe(prose)
+  })
+
+  test('mentions drawn over the text never enter it', () => {
+    const prose = '"Go," said *Mara*, and Mara went.\n\nRook stayed.'
+    const editor = new Editor({ extensions: proseExtensions(), content: prose, contentType: 'markdown' })
+    try {
+      editor.storage.mentionHighlights.find = (text: string) =>
+        [...text.matchAll(/Mara|Rook/g)].map((m) => ({
+          from: m.index,
+          to: m.index + 4,
+          quote: m[0],
+          targets: [{ kind: 'character' as const, id: m[0].toLowerCase(), title: m[0] }],
+          certainty: 'certain' as const,
+        }))
+      editor.view.dispatch(editor.state.tr.setMeta(mentionsKey, true))
+      const drawn = [...editor.view.dom.querySelectorAll('.mention')].map((el) => el.textContent)
+      expect(drawn).toEqual(['Mara', 'Mara', 'Rook'])
+      expect(readProse(editor)).toBe(prose)
+    } finally {
+      editor.destroy()
+    }
   })
 })

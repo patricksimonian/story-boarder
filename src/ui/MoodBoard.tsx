@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { FileAccess } from '../adapters/types'
+import { mimeOf } from './images'
 import { SketchPad } from './SketchPad'
 
 /**
@@ -62,14 +63,6 @@ export function MoodBoard({
       )}
     </div>
   )
-}
-
-/** An <img> only renders an SVG blob when the MIME says so; the rest are happy either way. */
-function mimeOf(path: string): string {
-  const ext = path.split('.').at(-1)?.toLowerCase()
-  if (ext === 'svg') return 'image/svg+xml'
-  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg'
-  return `image/${ext ?? 'png'}`
 }
 
 function BoardImage({ path, files, onRemove }: { path: string; files: FileAccess; onRemove: () => void }) {

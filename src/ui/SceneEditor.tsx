@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FileAccess, GitClient, GitCommit } from '../adapters/types'
-import type { Scene, Slug, Story } from '../domain/types'
+import type { Scene, Slug, Story, TargetKey } from '../domain/types'
 import { insertBeat, moveBeat, removeBeat, setBeat } from '../editor/beats'
+import type { MentionContext } from '../mentions/context'
+import type { Target } from '../mentions/match'
+import { NamedIn } from './NamedIn'
+import type { Progress } from '../assistant/claudeCode'
+import { ReadButton } from './ReadButton'
+import { ReadOutcome, type ReadInfo } from './ReadOutcome'
 import type { Placement } from '../story/mutations'
 import { EngineEditor } from './EngineEditor'
 import { MoodBoard } from './MoodBoard'
@@ -27,6 +33,16 @@ export function SceneEditor({
   git,
   onRestore,
   onAddImages,
+  mentions,
+  namedIn = [],
+  onOpenTarget = () => {},
+  canRead = false,
+  reading = false,
+  progress,
+  readProblem = null,
+  onRead,
+  onCancelRead,
+  read = null,
 }: {
   story: Story
   scene: Scene
@@ -43,6 +59,23 @@ export function SceneEditor({
   onRestore: (text: string) => void
   /** Stores the picked files under assets/ and pins them to this scene. */
   onAddImages: (picked: File[]) => void
+  /** What the prose names, and what to do about it; absent before a story is loaded. */
+  mentions?: MentionContext
+  /** Everywhere this scene is named by title, most often first. */
+  namedIn?: Target[]
+  onOpenTarget?: (key: TargetKey) => void
+  /** Whether Claude Code can be reached for a read. */
+  canRead?: boolean
+  /** A read of this scene is in flight. */
+  reading?: boolean
+  progress?: (Progress & { startedAt: number }) | undefined
+  /** Why the last read failed, when it did. */
+  readProblem?: string | null
+  /** Sends this scene to the read now, whether or not it changed. */
+  onRead?: () => void
+  onCancelRead?: () => void
+  /** What the last read of this scene found. */
+  read?: ReadInfo | null
 }) {
   const { manifest } = story
   const act = manifest.acts.find((a) => a.id === scene.act)
@@ -99,6 +132,7 @@ export function SceneEditor({
             <button className="ed-histbtn" onClick={() => void toggleHistory()}>
               History
             </button>
+            {onRead && <ReadButton what="scene" progress={progress} canRead={canRead} reading={reading} readProblem={readProblem} onRead={onRead} onCancel={onCancelRead} />}
             {scene.characters.length > 0 && <span className="ed-chips">👤 {scene.characters.join(', ')}</span>}
           </div>
           {history && (
@@ -232,12 +266,15 @@ export function SceneEditor({
           </div>
           <div className="ed-section">
             <label>Prose</label>
+            <ReadOutcome read={read} />
             <ProseEditor
               key={`${scene.id}:${revision}`}
               markdown={scene.prose}
               onChange={(prose) => onChange({ ...scene, prose })}
+              mentions={mentions}
             />
           </div>
+          <NamedIn items={namedIn} onOpen={onOpenTarget} />
           <MoodBoard
             images={scene.images}
             files={files}

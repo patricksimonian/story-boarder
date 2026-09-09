@@ -5,6 +5,7 @@ import { parseNoteFile } from '../files/noteFile'
 import { parseReferenceFile } from '../files/referenceFile'
 import { parseRegistryFile } from '../files/registryFile'
 import { parseSceneFile } from '../files/sceneFile'
+import { MENTIONS_PATH, parseVerdicts } from '../mentions/verdicts'
 
 /** One flagged file: what's wrong, plus the raw text so it can be edited in place. */
 export interface FileProblem {
@@ -84,11 +85,19 @@ export async function loadStory(files: FileAccess): Promise<LoadStoryResult> {
 
   const playthroughs = await loadPlaythroughs(files, flag)
 
+  let verdicts: Story['verdicts'] = {}
+  if (await files.exists(MENTIONS_PATH)) {
+    const raw = await files.readText(MENTIONS_PATH)
+    const result = parseVerdicts(raw)
+    if (result.ok) verdicts = result.store
+    else flag(MENTIONS_PATH, result.problems, raw)
+  }
+
   crossCheck(manifest, scenes, flag)
 
   return {
     ok: true,
-    loaded: { story: { manifest, scenes, references, notes, registry, playthroughs }, problems },
+    loaded: { story: { manifest, scenes, references, notes, registry, playthroughs, verdicts }, problems },
   }
 }
 
