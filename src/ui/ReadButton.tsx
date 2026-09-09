@@ -33,11 +33,16 @@ export function ReadButton({
         type="button"
         className={className}
         disabled={!canRead || reading}
-        title={`Sends this ${what} to Claude through your own Claude Code and records what it says about who is in it, what changes, and what the story still lacks`}
+        title={
+          canRead
+            ? `Sends this ${what} to Claude through your own Claude Code and records what it says about who is in it, what changes, and what the story still lacks`
+            : 'Coaching is off, or its check has not passed — see Settings'
+        }
         onClick={onRead}
       >
         {reading ? 'Reading…' : 'Read'}
       </button>
+      {!canRead && !reading && <span className="read-off">coaching off — see Settings</span>}
       {reading && (
         <span className="read-progress" role="status" aria-label="Reading">
           {progress && <span className="read-phase">{phaseWord(progress)}</span>}

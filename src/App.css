@@ -2881,3 +2881,8 @@ button.sb-pen:focus-visible {
 .read-chars {
   font-variant-numeric: tabular-nums;
 }
+.read-off {
+  font-size: 12px;
+  color: var(--muted);
+  margin-left: 6px;
+}

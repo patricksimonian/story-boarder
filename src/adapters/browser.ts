@@ -361,6 +361,8 @@ async function readLines(response: Response, onLine: (line: string) => void): Pr
     if (typeof parsed.line === 'string') onLine(parsed.line)
     if (parsed.done) outcome.done = parsed.done
     if (typeof parsed.error === 'string') outcome.error = parsed.error
+    // A helper from before the stream answers with the ending alone.
+    if (!parsed.line && !parsed.done && typeof (parsed as Partial<ProcessResult>).stdout === 'string') outcome.done = parsed as Partial<ProcessResult>
   }
   if (!response.body) {
     for (const raw of (await response.text()).split(/\r?\n/)) take(raw)
