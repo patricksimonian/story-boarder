@@ -2,7 +2,7 @@ import type { Story, TargetKey } from '../domain/types'
 import { variableUsage } from '../engine/usage'
 import { GLOSSARY } from './glossary'
 import { hashText, type EditorNote, type Ledger, type LedgerEntry } from './ledger'
-import { findMentions, itemText, type Dictionary } from '../mentions/match'
+import { findMentions, itemText, mentionIndex, type Dictionary } from '../mentions/match'
 import { parseTargetKey, targetKey } from '../mentions/verdicts'
 import type { JsonSchema, WorkflowRequest } from './claudeCode'
 
@@ -109,13 +109,14 @@ First, the bookkeeping. Mentions: phrases on this page that refer to a named thi
 Then the notes, which are the point. Each is one sentence a writer would nod at, with the quote from this page it rests on, and a kind:
 - continuity: this page against the world the library pages and notes lay down, or against what the scenes before it developed. A change over time is not a contradiction; a flat clash is. A page in the library is a reference a scene may reveal to be belief rather than fact; say so only when the clash has no such reading.
 - loose-end: a thing this page sets up, promises, or raises that nothing before it accounts for and that the writer may want to pay off — a named object, a threat, a question a character asks and nobody answers. Not every unanswered line is a loose end; only what a reader would carry forward.
-- define: anything this page treats as part of the story that the story does not yet hold as a first-class thing, and this is the note that matters most. A person, a place, a region, a faction, a relic, a rite, a piece of history or world-building that a reader would expect to look up and the library has no page for: name it as written in name, and say in defineAs whether it should be a character, a place, or lore. An event this page tells or assumes that ought to be a scene of its own: defineAs scene, and name the scene. A body of world-building or backstory that deserves a note of its own: defineAs note, and name it. State this page implies that the story will want to test later and no variable tracks, an effect it plainly performs that the engine does not apply, a condition it plainly assumes: defineAs variable, and propose it (id in snake_case, type, initial, a one-line description in the writer's words) or give the effect as an expression the engine reads, e.g. "trust += 1", "mara_alive = false". Also a define note: a library character who is on this page but not in the scene's characters field (give their key as the entity, defineAs character). Judge by what the story would need, never by capital letters: "the swamp" and "port town" are places if the story keeps returning to them.
+- define: anything this page treats as part of the story that the story does not yet hold as a first-class thing, and this is the note that matters most. A person, a place, a region, a faction, a relic, a rite, a piece of history or world-building that a reader would expect to look up and the library has no page for: name it as written in name, and say in defineAs whether it should be a character, a place, or lore. An event this page tells or assumes that ought to be a scene of its own: defineAs scene, and name the scene. A body of world-building or backstory that deserves a note of its own: defineAs note, and name it. State this page implies that the story will want to test later and no variable tracks, an effect it plainly performs that the engine does not apply, a condition it plainly assumes: defineAs variable, and propose it (id in snake_case, type, initial, a one-line description in the writer's words) or give the effect as an expression the engine reads, e.g. "trust += 1", "mara_alive = false". Also a define note: a library character who is on this page but not in the scene's characters field (give their key as the entity, defineAs character). When the briefing shows the scenes and notes that name this page, read them for this page's subject too: a leader, a rite, a place, a faction those scenes treat as part of what this page is about and the story has no page for is a define note here, quoting the scene that names it. When the briefing lists things other reads already said the story lacks, connect them: if one of them belongs to this page's subject, say so in a define note rather than flagging it fresh. Judge by what the story would need, never by capital letters: "the swamp" and "port town" are places if the story keeps returning to them.
 - other: anything an editor would flag that fits none of the above.
 
 Restraint is the rule: a handful of notes at most, each one you would stand behind, none you cannot quote. A page that is fine gets no notes. Name every thing by its key from the roster, exactly as given (kind:id). Answer with the JSON the schema asks for and nothing else.`
 
 const PAGE_BUDGET = 1400
 const NOTE_LIMIT = 6
+const NAMER_LIMIT = 6
 
 function clip(text: string, budget: number = PAGE_BUDGET): string {
   const trimmed = text.trim()
@@ -193,6 +194,34 @@ export function briefReadScene(story: Story, item: TargetKey, dict: Dictionary, 
     lines.push('# Notes that bear on it (the notebook)', '')
     for (const n of notes) lines.push(`## note: ${n.title} (note:${n.id})`, '', clip(n.body) || '(the note is empty)', '')
   }
+
+  // A page's subject reaches into the scenes and notes that name it: the
+  // Owl Leader lives in the owls' scenes, not on the owls' page.
+  if (!scene) {
+    const namers = (mentionIndex(story, dict).get(item) ?? [])
+      .filter((site) => targetKey(site.item) !== item)
+      .sort((a, b) => b.count - a.count || a.item.title.localeCompare(b.item.title))
+      .slice(0, NAMER_LIMIT)
+    if (namers.length) {
+      lines.push('# Where this page is named (read these for its subject too)', '')
+      for (const site of namers) {
+        const key = targetKey(site.item)
+        lines.push(`## ${site.item.kind}: ${site.item.title} (${key})`, '', clip(itemText(story, key) ?? '') || '(empty)', '')
+      }
+    }
+  }
+
+  const missing: string[] = []
+  for (const [other, entry] of Object.entries(ledger)) {
+    if (other === item) continue
+    for (const n of entry.notes ?? []) {
+      if (n.kind === 'define' && !n.entity && n.name) {
+        const where = dict.targets.get(other)?.title ?? other
+        missing.push(`${n.name} (${n.defineAs ?? 'something'}, flagged on ${where})`)
+      }
+    }
+  }
+  if (missing.length) lines.push('# Things other reads said the story lacks', '', ...missing.slice(0, 20), '')
 
   lines.push('# The roster (name things by these keys)', '')
   const byKind = new Map<string, string[]>()

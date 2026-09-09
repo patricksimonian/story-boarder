@@ -53,6 +53,29 @@ describe('the read-scene briefing', () => {
     expect(briefing).toContain('trust (number, starts at 0, "How far Mara trusts Rook.") — on this scene: effect: trust += 1; condition: trust >= 1')
   })
 
+  test('a page is briefed with the scenes and notes that name it, and with what other reads said is missing', async () => {
+    const s = await story()
+    const ledger: Ledger = {
+      'scene:cold-open': {
+        hash: 'h',
+        readAt: 1,
+        mentions: [],
+        rejected: [],
+        developments: [],
+        notes: [{ kind: 'define', message: 'The Owl Leader has no page.', quote: 'the Owl Leader', name: 'the Owl Leader', defineAs: 'character' }],
+      },
+    }
+    const briefing = briefReadScene(s, 'character:rook', dictionary(s), ledger)!
+    expect(briefing).toContain('# The item: character "Rook" (character:rook)')
+    expect(briefing).toContain('# Where this page is named (read these for its subject too)')
+    expect(briefing).toContain('## scene: The Job Offer (scene:the-job-offer)')
+    expect(briefing).toContain('The door-woman spoke to the lifter.')
+    expect(briefing).toContain('## note: The Plan (note:plan)\n\nRook goes first.')
+    expect(briefing).toContain('# Things other reads said the story lacks\n\nthe Owl Leader (character, flagged on Cold Open: Lowmarket)')
+    // A scene's briefing does not list its namers; its lane and engine do that work.
+    expect(briefReadScene(s, 'scene:the-job-offer', dictionary(s), ledger)).not.toContain('Where this page is named')
+  })
+
   test('a note is briefed as its text, with no lane or variables', async () => {
     const s = await story()
     const briefing = briefReadScene(s, 'note:plan', dictionary(s), {})!
