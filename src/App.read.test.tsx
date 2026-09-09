@@ -83,7 +83,8 @@ function readingRunner(): StubProcessRunner {
             { kind: 'loose-end', message: 'Why she watches doors is raised and not answered.', quote: 'out of habit' },
           ]
         : []
-    return { mentions, rejected: [], developments, notes }
+    const rejected = item === 'scene:the-dry-cistern' ? [{ quote: 'Maara', candidate: 'character:mara', why: 'a different word here' }] : []
+    return { mentions, rejected, developments, notes }
   })
   return runner
 }
@@ -123,7 +124,8 @@ describe('the scene read', () => {
 
     // The scene says what the read found, right under the button: the notes with their fixes, then the developments.
     const outcome = within(editor).getByRole('region', { name: 'Last read' })
-    expect(outcome).toHaveTextContent('Read just now: 3 editor’s notes, 2 things to define, 1 development, 1 phrase resolved')
+    expect(outcome).toHaveTextContent('Read just now: 3 editor’s notes, 2 things to define, 1 development, 1 phrase resolved, 1 name ruled out')
+    expect(within(outcome).getByRole('list', { name: 'Names ruled out' })).toHaveTextContent('Maara is not Mara here: a different word here')
     expect(outcome).toHaveTextContent('Mara Mara stops watching the door.')
     expect(outcome).toHaveTextContent('Why she watches doors is raised and not answered.')
     expect(outcome).toHaveTextContent('the cistern: mentioned, but no place page describes it.')
@@ -151,11 +153,14 @@ describe('the scene read', () => {
       }),
     )
 
-    // Hovering the resolved phrase shows what this scene developed about her.
+    // Hovering the resolved phrase shows what this scene developed about her, and keeps it as her name in one click.
     await userEvent.hover(mentionsIn(editor).find((el) => el.textContent === 'The door-woman')!)
     const tip = await screen.findByRole('dialog', { name: /mention: the door-woman/i })
     expect(tip).toHaveTextContent('Mara stops watching the door.')
-    expect(tip).toHaveTextContent('Confirm Mara')
+    expect(tip).toHaveTextContent('The read took The door-woman to mean Mara.')
+    await userEvent.click(within(tip).getByRole('button', { name: 'Keep as a name for Mara' }))
+    await waitFor(async () => expect(await world.files.readText('characters/mara.md')).toContain('aliases: [The door-woman]'))
+    await waitFor(() => expect(mentionsIn(editor).find((el) => el.textContent === 'The door-woman')?.className).toContain('mention-certain'))
 
     // Closing the scene saves nothing new, so the idle read finds the same text and stays quiet.
     await userEvent.keyboard('{Escape}')

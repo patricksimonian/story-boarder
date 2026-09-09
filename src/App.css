@@ -2909,3 +2909,38 @@ button.sb-pen:focus-visible {
   font-size: 12.5px;
   color: #3a6ea5;
 }
+.mention-model {
+  text-decoration-style: solid;
+  text-decoration-thickness: 1.5px;
+  text-decoration-color: #e0862b;
+}
+.mention-picker {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-basis: 100%;
+}
+.mention-picker input {
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 12px;
+}
+.mention-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 160px;
+  overflow: auto;
+}
+.mention-picker-list button {
+  text-align: left;
+  border: 0;
+  background: none;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+.mention-picker-list button:hover {
+  background: var(--shade);
+}

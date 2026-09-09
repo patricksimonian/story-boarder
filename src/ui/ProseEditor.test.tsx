@@ -140,6 +140,32 @@ describe('mentions in the prose editor', () => {
     expect(ctx.onVerdict).toHaveBeenCalledWith('Kal’ewei', null)
   })
 
+  test('an orange name can be connected to something that exists: pick it, and it becomes that thing’s name too', async () => {
+    const ctx = context({
+      find: (text) => {
+        const at = text.indexOf('the raven king')
+        return at < 0 ? [] : [{ from: at, to: at + 14, quote: 'the raven king', targets: [], certainty: 'unknown' }]
+      },
+      roster: () => [
+        { kind: 'character', id: 'king-naviro', title: 'King Naviro' },
+        { kind: 'place', id: 'the-roost', title: 'The Roost' },
+      ],
+      onAlias: vi.fn(),
+    })
+    render(<ProseEditor markdown="Then the raven king nods." onChange={() => {}} mentions={ctx} />)
+    await waitFor(() => expect(mentionEls()).toHaveLength(1))
+    await userEvent.hover(mentionEls()[0])
+    const tip = await screen.findByRole('dialog', { name: /mention: the raven king/i })
+    await userEvent.click(within(tip).getByRole('button', { name: 'It is something else…' }))
+    await userEvent.type(within(tip).getByRole('textbox', { name: 'Which thing' }), 'navi')
+    const options = within(tip).getAllByRole('option').map((o) => o.textContent)
+    expect(options).toEqual(['Character King Naviro'])
+    await userEvent.click(within(tip).getByRole('option', { name: /King Naviro/ }))
+    expect(ctx.onVerdict).toHaveBeenCalledWith('the raven king', 'character:king-naviro')
+    expect(ctx.onAlias).toHaveBeenCalledWith('character:king-naviro', 'the raven king')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
   test('a near miss asks, and fixing the spelling is an edit that keeps the possessive', async () => {
     const ctx = context()
     const onChange = vi.fn()

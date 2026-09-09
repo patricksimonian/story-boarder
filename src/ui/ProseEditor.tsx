@@ -4,7 +4,7 @@ import type { TargetKey } from '../domain/types'
 import { proseExtensions, readProse } from '../editor/prose'
 import { KIND_LABEL, type MentionCard, type MentionContext } from '../mentions/context'
 import { pageParagraphs } from '../mentions/describe'
-import type { Certainty } from '../mentions/match'
+import type { Certainty, Target } from '../mentions/match'
 import { targetKey } from '../mentions/verdicts'
 
 /**
@@ -208,8 +208,18 @@ function MentionTip({
     onClose()
   }
   const one = cards.length === 1 ? cards[0] : undefined
+  const name = tip.quote.replace(/['’]s?$/, '')
+  const picker = mentions.roster && (
+    <Picker
+      roster={mentions.roster()}
+      onPick={(key) => {
+        mentions.onVerdict(tip.quote, key)
+        mentions.onAlias?.(key, name)
+        onClose()
+      }}
+    />
+  )
   if (tip.certainty === 'unknown') {
-    const name = tip.quote.replace(/['’]s?$/, '')
     const suggested = mentions.suggestedKind?.(tip.quote)
     const kinds: { kind: 'character' | 'place' | 'lore' | 'scene' | 'note'; label: string }[] = [
       { kind: 'character', label: 'character' },
@@ -238,6 +248,7 @@ function MentionTip({
               Create {label}
             </button>
           ))}
+          {picker}
           <button type="button" onClick={() => verdict(null)}>
             Not a thing
           </button>
@@ -253,7 +264,11 @@ function MentionTip({
       style={{ top: tip.top, left: tip.left }}
     >
       {tip.certainty === 'probable' && one && <p className="mention-ask">Did you mean {one.title}?</p>}
-      {tip.certainty === 'model' && <p className="mention-ask">Read as a mention — confirm it, or say it isn’t one.</p>}
+      {tip.certainty === 'model' && one && (
+        <p className="mention-ask">
+          The read took <strong>{name}</strong> to mean {one.title}. Confirm it, keep it as a name for {one.title}, pick something else, or say it isn’t one.
+        </p>
+      )}
       {cards.map((card) => (
         <div key={card.key} className="mention-card">
           <div className="mention-head">
@@ -318,9 +333,24 @@ function MentionTip({
           </>
         )}
         {tip.certainty === 'model' && one && (
-          <button type="button" onClick={() => verdict(one.key)}>
-            Confirm {one.title}
-          </button>
+          <>
+            <button type="button" onClick={() => verdict(one.key)}>
+              Confirm {one.title}
+            </button>
+            {mentions.onAlias && (
+              <button
+                type="button"
+                onClick={() => {
+                  mentions.onVerdict(tip.quote, one.key)
+                  mentions.onAlias?.(one.key, name)
+                  onClose()
+                }}
+              >
+                Keep as a name for {one.title}
+              </button>
+            )}
+            {picker}
+          </>
         )}
         {cards.length > 1 &&
           cards.map((card) => (
@@ -333,6 +363,34 @@ function MentionTip({
         </button>
       </div>
     </div>
+  )
+}
+
+/** "It is something that exists": a search over the roster, choosing one thing. */
+function Picker({ roster, onPick }: { roster: Target[]; onPick: (key: TargetKey) => void }) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)}>
+        It is something else…
+      </button>
+    )
+  }
+  const q = query.trim().toLowerCase()
+  const hits = roster.filter((t) => !q || t.title.toLowerCase().includes(q) || t.id.includes(q)).slice(0, 8)
+  return (
+    <span className="mention-picker">
+      <input autoFocus aria-label="Which thing" placeholder="type a name" value={query} onChange={(e) => setQuery(e.target.value)} />
+      <span className="mention-picker-list" role="listbox" aria-label="Things that exist">
+        {hits.map((t) => (
+          <button key={targetKey(t)} type="button" role="option" aria-selected={false} onClick={() => onPick(targetKey(t))}>
+            <span className="mention-kind">{KIND_LABEL[t.kind]}</span> {t.title}
+          </button>
+        ))}
+        {hits.length === 0 && <span className="mention-empty">nothing by that name</span>}
+      </span>
+    </span>
   )
 }
 

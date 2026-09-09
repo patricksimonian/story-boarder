@@ -35,6 +35,7 @@ import {
   addNotebookSection,
   createAct,
   createNote,
+  addAlias,
   createReference,
   createScene,
   createStoryline,
@@ -699,6 +700,8 @@ export default function App({
       onOpen: (key) => void openTarget(key),
       onVerdict: (quote, entity) => void ruleOnMention(item, quote, entity),
       onCreate: (kind, title) => void defineThing(kind, title),
+      roster: () => [...dict.targets.values()].sort((a, b) => a.title.localeCompare(b.title)),
+      onAlias: (key, alias) => void keepAsName(key, alias),
       suggestedKind: (quote) => ledger[item]?.notes?.find((n) => n.kind === 'define' && !n.entity && n.name && phraseKey(n.name) === phraseKey(quote))?.defineAs,
       imageUrl: async (path) => {
         if (!folder) return null
@@ -736,6 +739,13 @@ export default function App({
       summary,
       notes,
       developments: entry.developments.map((d) => ({ title: dict?.targets.get(d.entity)?.title ?? d.entity, fact: d.fact, quote: d.quote })),
+      // A writer's "it is" outranks the read's "it is not", and stays.
+      ruledOut: entry.rejected.map((r) => ({
+        quote: r.quote,
+        candidateTitle: dict?.targets.get(r.candidate)?.title ?? r.candidate,
+        why: r.why,
+        keep: () => void ruleOnMention(item, r.quote, r.candidate),
+      })),
     }
   }
 
@@ -761,6 +771,19 @@ export default function App({
     const kind = note.defineAs
     const noun = kind === 'lore' ? 'lore page' : kind
     return { label: `Create ${kind === 'note' || kind === 'scene' ? 'a' : kind === 'lore' ? 'a' : 'a'} ${noun} for ${name}`, run: () => void defineThing(kind, name) }
+  }
+
+  /** A phrase kept as a name for a page: written onto the page, so the matcher finds it from then on. */
+  async function keepAsName(key: TargetKey, alias: string): Promise<void> {
+    const parsed = parseTargetKey(key)
+    if (!folder || !parsed || !['character', 'place', 'lore'].includes(parsed.kind)) return
+    const open = refDraftRef.current
+    if (open && open.entity.kind === parsed.kind && open.entity.id === parsed.id) {
+      if (!open.entity.aliases.some((a) => a.toLowerCase() === alias.toLowerCase())) editReference({ ...open.entity, aliases: [...open.entity.aliases, alias] })
+      return
+    }
+    await addAlias(folder.files, parsed.kind as ReferenceKind, parsed.id, alias)
+    await reload(folder)
   }
 
   /** Creates the thing a define note or an orange name asks for, without leaving the page the writer is on. */

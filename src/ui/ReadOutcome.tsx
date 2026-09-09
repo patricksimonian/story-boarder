@@ -11,6 +11,8 @@ export interface ReadInfo {
   summary: string
   notes: ReadNote[]
   developments: { title: string; fact: string; quote: string }[]
+  /** Names the matcher drew that the read said do not mean that thing here; each can be kept after all. */
+  ruledOut: { quote: string; candidateTitle: string; why: string; keep: () => void }[]
 }
 
 export interface ReadNote extends EditorNote {
@@ -93,6 +95,23 @@ export function ReadOutcome({ read }: { read?: ReadInfo | null }) {
                     {note.action.label}
                   </button>
                 )}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {read.ruledOut.length > 0 && (
+        <>
+          <h5 className="read-heading">Names ruled out</h5>
+          <ul className="read-notes" aria-label="Names ruled out">
+            {read.ruledOut.map((r, i) => (
+              <li key={i} className="read-note ruled-out">
+                <span className="read-message">
+                  <q>{r.quote}</q> is not {r.candidateTitle} here{r.why ? `: ${r.why}` : '.'}
+                </span>
+                <button type="button" className="goto" onClick={r.keep}>
+                  It is {r.candidateTitle}
+                </button>
               </li>
             ))}
           </ul>

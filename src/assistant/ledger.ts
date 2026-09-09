@@ -150,7 +150,7 @@ export function readSummary(entry: LedgerEntry | undefined, now: number = Date.n
   if (missing) parts.push(n(missing, 'thing to define', 'things to define'))
   if (entry.developments.length) parts.push(n(entry.developments.length, 'development', 'developments'))
   if (entry.mentions.length) parts.push(n(entry.mentions.length, 'phrase resolved', 'phrases resolved'))
-  if (entry.rejected.length) parts.push(n(entry.rejected.length, 'name refused', 'names refused'))
+  if (entry.rejected.length) parts.push(n(entry.rejected.length, 'name ruled out', 'names ruled out'))
   return `Read ${when}: ${parts.length ? parts.join(', ') : 'nothing to record'}`
 }
 

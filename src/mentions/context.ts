@@ -20,6 +20,10 @@ export interface MentionContext {
   onCreate?: (kind: 'character' | 'place' | 'lore' | 'scene' | 'note', title: string) => void
   /** What the read thought an orange name should be, when it said. */
   suggestedKind?: (quote: string) => string | undefined
+  /** Every page, scene, note, and variable the story has, for "it is something that exists". */
+  roster?: () => Target[]
+  /** Keeps a phrase as a name for a page, so the matcher finds it from then on. */
+  onAlias?: (key: TargetKey, alias: string) => void
 }
 
 export interface MentionCard {
