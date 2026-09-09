@@ -222,7 +222,7 @@ function MentionTip({
     return (
       <div className="mention-tip mention-tip-unknown" role="dialog" aria-label={`Mention: ${tip.quote}`} style={{ top: tip.top, left: tip.left }}>
         <p className="mention-ask">
-          The story has nothing for <strong>{name}</strong> yet{suggested ? `; the read thought it wants a ${suggested === 'lore' ? 'lore page' : suggested}` : ''}.
+          <strong>{name}</strong> is mentioned, but nothing in the story describes it.{suggested ? ` Suggested: a ${suggested === 'lore' ? 'lore page' : suggested}.` : ''}
         </p>
         <div className="mention-actions">
           {ordered.map(({ kind, label }) => (

@@ -99,6 +99,39 @@ function entryFor(term: string, target: Target, certainty: Certainty, rank: Entr
   return { words: tokens.map((t) => t.text), gaps, proper, target, certainty, rank }
 }
 
+/**
+ * The forms a title is also found in: without its article ("The Keepers"
+ * is named as "Keepers"), and with its last word in the other number
+ * ("the Keeper role" names The Keepers). Derived from the title, never
+ * guessed, and only for names of two or more words or four or more
+ * letters, so a short title does not turn every near word into itself.
+ */
+export function titleVariants(title: string): string[] {
+  const out = new Set<string>()
+  const trimmed = title.trim()
+  const bare = trimmed.replace(/^(the|a|an)\s+/i, '')
+  for (const base of new Set([trimmed, bare])) {
+    if (!base) continue
+    out.add(base)
+    const words = base.split(/\s+/)
+    const last = words[words.length - 1]
+    if (last.length < 4) continue
+    const numbered: string[] = []
+    if (/ies$/i.test(last)) numbered.push(last.replace(/ies$/i, 'y'))
+    else if (/(s|x|z|ch|sh)es$/i.test(last)) numbered.push(last.replace(/es$/i, ''))
+    else if (/[^s]s$/i.test(last)) numbered.push(last.slice(0, -1))
+    else if (/[^aeiou]y$/i.test(last)) numbered.push(last.replace(/y$/i, 'ies'))
+    else if (/(s|x|z|ch|sh)$/i.test(last)) numbered.push(`${last}es`)
+    else numbered.push(`${last}s`)
+    for (const form of numbered) {
+      if (form.length < 3) continue
+      out.add([...words.slice(0, -1), form].join(' '))
+    }
+  }
+  out.delete(trimmed)
+  return [...out]
+}
+
 /** Every name the story knows, ready to be found in prose. */
 export function dictionary(story: Story): Dictionary {
   const targets = new Map<TargetKey, Target>()
@@ -111,9 +144,9 @@ export function dictionary(story: Story): Dictionary {
     }
   }
   for (const entity of story.references.values()) {
-    add({ kind: entity.kind, id: entity.id, title: entity.title }, [entity.title, ...entity.aliases], true)
+    add({ kind: entity.kind, id: entity.id, title: entity.title }, [entity.title, ...titleVariants(entity.title), ...entity.aliases], true)
   }
-  for (const note of story.notes.values()) add({ kind: 'note', id: note.id, title: note.title }, [note.title], true)
+  for (const note of story.notes.values()) add({ kind: 'note', id: note.id, title: note.title }, [note.title, ...titleVariants(note.title)], true)
   for (const scene of story.scenes.values()) add({ kind: 'scene', id: scene.id, title: scene.title }, [scene.title], true)
   for (const variable of story.registry.variables) {
     add({ kind: 'variable', id: variable.id, title: variable.id }, [variable.id], false)

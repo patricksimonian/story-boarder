@@ -23,8 +23,26 @@ export interface ReadNote extends EditorNote {
 const KIND_LABEL: Record<EditorNote['kind'], string> = {
   continuity: 'Continuity',
   'loose-end': 'Loose end',
-  define: 'Define',
+  define: 'Undefined',
   other: 'Note',
+}
+
+const NOUN: Record<NonNullable<EditorNote['defineAs']>, string> = {
+  character: 'character page',
+  place: 'place page',
+  lore: 'lore page',
+  scene: 'scene',
+  note: 'note',
+  variable: 'variable',
+}
+
+/** What is the case, in one shape: the thing, and what does not describe it. */
+function defineHeadline(note: ReadNote): string | null {
+  if (note.kind !== 'define') return null
+  if (note.entity) return `${note.entityTitle ?? note.entity} is on this page but not listed on the scene.`
+  if (!note.name) return null
+  const noun = note.defineAs ? NOUN[note.defineAs] : 'page, scene, note, or variable'
+  return `${note.name}: mentioned, but no ${noun} describes it.`
 }
 
 export function ReadOutcome({ read }: { read?: ReadInfo | null }) {
@@ -38,7 +56,13 @@ export function ReadOutcome({ read }: { read?: ReadInfo | null }) {
             <li key={i} className={`read-note ${note.kind}`}>
               <span className="read-kind">{KIND_LABEL[note.kind]}</span>
               <span className="read-message" title={note.quote}>
-                {note.message}
+                {defineHeadline(note) ? (
+                  <>
+                    <strong>{defineHeadline(note)}</strong> {note.message}
+                  </>
+                ) : (
+                  note.message
+                )}
               </span>
               {note.quote && <q className="read-quote">{note.quote}</q>}
               {note.action && (

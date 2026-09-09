@@ -12,6 +12,7 @@ Mara watched the door. Maara stopped watching it. The door-woman spoke to the li
 
 async function story() {
   const files = embersFiles()
+  await files.writeText('lore/the-keepers.md', '---\nid: the-keepers\n---\n\n# The Keepers\n\nA Keeper holds the forest.\n')
   await files.writeText('characters/rook.md', '---\nid: rook\naliases: [the lifter]\n---\n\n# Rook\n\nA lifter.\n')
   await files.writeText('notes/plan.md', '---\nid: plan\n---\n\n# The Plan\n\nRook goes first.\n')
   await files.writeText(
@@ -119,6 +120,9 @@ describe('what the read leaves in the ledger', () => {
         ],
         notes: [
           { kind: 'define', message: 'The Atacam has no page.', quote: 'the Atacam', name: 'the Atacam', defineAs: 'place' },
+          { kind: 'define', message: 'The Keepers are mentioned, but no lore page describes them.', quote: 'q', name: 'the Keeper', defineAs: 'lore' },
+          { kind: 'define', message: 'Rook is mentioned, but no page describes him.', quote: 'q', name: 'Rook', defineAs: 'character' },
+          { kind: 'define', message: 'trust is untracked.', quote: 'q', name: 'trust', defineAs: 'variable', variable: { id: 'trust', type: 'number', initial: '0', description: 'x' } },
           { kind: 'define', message: 'Trust wants tracking.', quote: 'q', name: 'Trust Level', defineAs: 'variable', variable: { id: 'Trust Level', type: 'number', initial: '0', description: 'How far.' } },
           { kind: 'define', message: 'Rook is here and not listed.', quote: 'Rook fed the stove.', entity: 'character:rook', defineAs: 'character' },
           { kind: 'define', message: 'names nothing', quote: 'q' },

@@ -127,7 +127,7 @@ describe('mentions in the prose editor', () => {
     expect(mentionEls()[0].className).toContain('mention-unknown')
     await userEvent.hover(mentionEls()[0])
     const tip = await screen.findByRole('dialog', { name: /mention: kal’ewei/i })
-    expect(tip).toHaveTextContent('The story has nothing for Kal’ewei yet; the read thought it wants a place.')
+    expect(tip).toHaveTextContent('Kal’ewei is mentioned, but nothing in the story describes it. Suggested: a place.')
     const buttons = within(tip).getAllByRole('button').map((b) => b.textContent)
     expect(buttons[0]).toBe('Create place')
     expect(buttons).toContain('Not a thing')

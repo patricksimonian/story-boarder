@@ -126,6 +126,7 @@ describe('the scene read', () => {
     expect(outcome).toHaveTextContent('Read just now: 3 editor’s notes, 2 things to define, 1 development, 1 phrase resolved')
     expect(outcome).toHaveTextContent('Mara Mara stops watching the door.')
     expect(outcome).toHaveTextContent('Why she watches doors is raised and not answered.')
+    expect(outcome).toHaveTextContent('the cistern: mentioned, but no place page describes it.')
     expect(within(outcome).getByRole('button', { name: 'Create a place for the cistern' })).toBeInTheDocument()
 
     // A thing the read said is missing is drawn in orange; its card creates the page in one click.
@@ -134,7 +135,7 @@ describe('the scene read', () => {
     expect(orange).toHaveTextContent('the cistern')
     await userEvent.hover(orange)
     const unknownTip = await screen.findByRole('dialog', { name: /mention: the cistern/i })
-    expect(unknownTip).toHaveTextContent('The story has nothing for the cistern yet; the read thought it wants a place.')
+    expect(unknownTip).toHaveTextContent('the cistern is mentioned, but nothing in the story describes it. Suggested: a place.')
     await userEvent.click(within(unknownTip).getByRole('button', { name: 'Create place' }))
     await waitFor(async () => expect(await world.files.exists('places/the-cistern.md')).toBe(true))
     await waitFor(() => expect(mentionsIn(editor).find((el) => el.textContent === 'the cistern')?.className).toContain('mention-certain'))

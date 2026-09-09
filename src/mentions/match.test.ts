@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import type { Note, ReferenceEntity, ReferenceKind, Scene, Story } from '../domain/types'
-import { dictionary, editDistance, findMentions, mentionIndex, type Span } from './match'
+import { dictionary, editDistance, findMentions, mentionIndex, titleVariants, type Span } from './match'
 
 function scene(id: string, title: string, prose: string, extra: Partial<Scene> = {}): Scene {
   return {
@@ -108,6 +108,24 @@ describe('the literal pass', () => {
     expect(brief(findMentions('Mara waited.', d))).toEqual([['Mara', 'character:mara|note:mara', 'certain']])
     expect(brief(findMentions('Mara waited.', d, { self: 'character:mara' }))).toEqual([['Mara', 'note:mara', 'certain']])
     expect(findMentions('Rook waited.', d, { self: 'character:rook' })).toEqual([])
+  })
+
+  test('a title is found without its article and in the other number: the Keeper role names The Keepers', () => {
+    const s = story()
+    s.references.set('the-keepers', entity('lore', 'the-keepers', 'The Keepers'))
+    s.references.set('the-great-owls', entity('lore', 'the-great-owls', 'The Great Owls'))
+    s.notes.set('cities', note('cities', 'Cities'))
+    const d = dictionary(s)
+    expect(brief(findMentions('The Keeper role is central. Keepers hold the forest; a Great Owl watches, the Great Owls wait. The City sleeps; the city too.', d))).toEqual([
+      ['The Keeper', 'lore:the-keepers', 'certain'],
+      ['Keepers', 'lore:the-keepers', 'certain'],
+      ['Great Owl', 'lore:the-great-owls', 'certain'],
+      ['the Great Owls', 'lore:the-great-owls', 'certain'],
+      ['City', 'note:cities', 'certain'],
+    ])
+    expect(titleVariants('The Keepers').sort()).toEqual(['Keeper', 'Keepers', 'The Keeper'])
+    expect(titleVariants('Mara')).toEqual(['Maras'])
+    expect(titleVariants('The Vault').sort()).toEqual(['The Vaults', 'Vault', 'Vaults'])
   })
 
   test('an alias is a name like any other', () => {
