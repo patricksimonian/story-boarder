@@ -81,7 +81,7 @@ describe('the Claude pane', () => {
     expect(await world.files.readText('coach/read-scene.md')).toBe('Read it my way.\n')
     expect(await world.files.exists('coach/check-continuity.md')).toBe(true)
     expect(pane.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument()
-    expect(runner.calls.filter((c) => c.workflow === 'ping').every((c) => c.argv.includes('haiku') || c.argv.includes('sonnet'))).toBe(true)
+    expect(runner.calls.filter((c) => c.workflow === 'ping').every((c) => c.model === 'haiku' || c.model === 'sonnet')).toBe(true)
   })
 
   test('each terse error, and Check again', async () => {

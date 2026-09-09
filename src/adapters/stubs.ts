@@ -3,6 +3,7 @@
  * later stages, no more.
  */
 
+import type { ClaudeRun } from '../assistant/claudeCode'
 import type {
   AuthStatus,
   FileAccess,
@@ -122,12 +123,12 @@ type Canned = ProcessResult | ((stdin: string) => ProcessResult)
 
 /**
  * A process runner that never spawns: it answers each workflow by name
- * with what a test canned for it, and records every argv and stdin so
- * a test can assert the briefing that reached Claude Code.
+ * with what a test canned for it, and records every run so a test can
+ * assert the briefing and the model that reached Claude Code.
  */
 export class StubProcessRunner implements ProcessRunner {
   kind: 'desktop' | 'browser' = 'desktop'
-  calls: { workflow?: string; argv: string[]; stdin: string }[] = []
+  calls: { workflow: string; model: string; stdin: string; run: ClaudeRun }[] = []
   private canned = new Map<string, Canned>()
 
   statusValue: RunnerStatus
@@ -152,22 +153,23 @@ export class StubProcessRunner implements ProcessRunner {
     this.answer(workflow, typeof output === 'function' ? (stdin: string) => wrap((output as (s: string) => T)(stdin)) : wrap(output))
   }
 
-  async spawnClaude(argv: string[], stdin: string, opts?: SpawnOptions): Promise<ProcessResult> {
-    this.calls.push({ workflow: opts?.workflow, argv, stdin })
-    const canned = this.canned.get(opts?.workflow ?? '')
-    const result = await this.ending(canned, stdin, opts)
+  async spawnClaude(run: ClaudeRun, opts?: SpawnOptions): Promise<ProcessResult> {
+    this.calls.push({ workflow: run.workflow, model: run.model, stdin: run.briefing, run })
+    const canned = this.canned.get(run.workflow)
+    const result = await this.ending(canned, run)
     // What a real spawner does: every line of stdout, as it is printed.
     if (opts?.onLine) for (const line of result.stdout.split(/\r?\n/)) if (line.trim()) opts.onLine(line)
     return result
   }
 
-  private async ending(canned: Canned | undefined, stdin: string, opts?: SpawnOptions): Promise<ProcessResult> {
-    if (!canned && opts?.workflow === 'ping') {
+  private async ending(canned: Canned | undefined, run: ClaudeRun): Promise<ProcessResult> {
+    const stdin = run.briefing
+    if (!canned && run.workflow === 'ping') {
       // The health check pings; a stub answers it unless a test says otherwise.
       const echo = stdin.replace(/^Story title: /, '')
       return { stdout: JSON.stringify({ type: 'result', subtype: 'success', result: JSON.stringify({ echo }), structured_output: { echo } }), stderr: '', exitCode: 0 }
     }
-    if (!canned) return { stdout: '', stderr: `no canned answer for ${opts?.workflow ?? 'this workflow'}`, exitCode: 1 }
+    if (!canned) return { stdout: '', stderr: `no canned answer for ${run.workflow}`, exitCode: 1 }
     return typeof canned === 'function' ? canned(stdin) : canned
   }
 

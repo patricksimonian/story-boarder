@@ -1,9 +1,11 @@
-//! Spawning the writer's own Claude Code for one workflow request: the
-//! page builds the argv and the briefing, this runs the process and hands
-//! back what it printed. The binary is found the way `where` finds it,
-//! once, and cached; a run can be cancelled by the id the page gave it.
+//! Spawning the writer's own Claude Code for one run. The page sends a
+//! run — workflow, model, rubric, briefing, schema — and never an argv:
+//! every flag is fixed in `argv` below, so nothing that reaches this
+//! command can hand Claude Code a tool, a folder, or a permission. The
+//! binary is found the way `where` finds it, once, and cached; a run can
+//! be cancelled by the id the page gave it.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
@@ -17,6 +19,66 @@ pub struct ProcessResult {
     pub stderr: String,
     #[serde(rename = "exitCode")]
     pub exit_code: i32,
+}
+
+/// A run, as the page sends it: the four fields of a workflow request
+/// and the model. This is all the page can say about a run; a body with
+/// any other field in it is refused before it is looked at.
+#[derive(Deserialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Run {
+    pub workflow: String,
+    pub model: String,
+    pub system: String,
+    pub briefing: String,
+    pub schema: serde_json::Value,
+}
+
+/// An alias like `haiku`, or a full name: letters, digits, dots, dashes,
+/// underscores, and a `[1m]` suffix. Never a flag.
+fn is_model_name(model: &str) -> bool {
+    let starts_plainly = model.chars().next().map(|c| c.is_ascii_alphanumeric()).unwrap_or(false);
+    starts_plainly
+        && model.len() <= 80
+        && model.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | '[' | ']'))
+}
+
+/// The argv for one run. Every flag is fixed here and the run's own text
+/// goes in as values, so nothing in a run can add a flag. The run asks
+/// for one schema-validated JSON answer, streamed as it is made. It keeps
+/// nothing on disk, loads none of the writer's settings, and takes no
+/// MCP server from anywhere. It is not `--bare`, because bare mode never
+/// reads the subscription login. The only tool left is StructuredOutput,
+/// which is how Claude Code delivers the schema-shaped answer: removing
+/// every tool removes that one too, and the first real run spent five
+/// turns being refused it. scripts/assistant.mjs builds the same list
+/// for the browser build; change both, and the tests that pin them.
+pub fn argv(run: &Run) -> Result<Vec<String>, String> {
+    if !is_model_name(&run.model) {
+        return Err(format!("\"{}\" is not a model name Claude Code takes", run.model));
+    }
+    if !run.schema.is_object() {
+        return Err("The run's schema is not a JSON object".to_string());
+    }
+    Ok(vec![
+        "-p".into(),
+        "--output-format".into(),
+        "stream-json".into(),
+        "--verbose".into(),
+        "--include-partial-messages".into(),
+        "--json-schema".into(),
+        run.schema.to_string(),
+        "--model".into(),
+        run.model.clone(),
+        "--system-prompt".into(),
+        run.system.clone(),
+        "--tools".into(),
+        "StructuredOutput".into(),
+        "--strict-mcp-config".into(),
+        "--no-session-persistence".into(),
+        "--setting-sources".into(),
+        String::new(),
+    ])
 }
 
 /// The runs in flight, by the id the page gave each, so a cancel can find its process.
@@ -118,19 +180,20 @@ fn hide_window(command: &mut Command) {
 #[cfg(not(windows))]
 fn hide_window(_command: &mut Command) {}
 
-/// Runs claude with argv, writes stdin, hands each stdout line to `on_line`
-/// as it is printed, waits, and returns what it printed. Blocks the calling thread.
+/// Runs claude for one run — the argv from `argv`, the briefing on stdin —
+/// hands each stdout line to `on_line` as it is printed, waits, and
+/// returns what it printed. Blocks the calling thread.
 pub fn spawn(
     binary: &Path,
-    argv: &[String],
-    stdin_text: &str,
+    run: &Run,
     cwd: &Path,
     runs: &Runs,
     run_id: &str,
     on_line: impl Fn(&str) + Send + 'static,
 ) -> Result<ProcessResult, String> {
+    let argv = argv(run)?;
     let mut command = command_for(binary);
-    command.args(argv).current_dir(cwd).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    command.args(&argv).current_dir(cwd).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
     // Claude Code thinks before it answers unless told not to; for a
     // one-shot read that was forty seconds and thousands of tokens spent
     // before the first word, for no better answer.
@@ -143,7 +206,7 @@ pub fn spawn(
     let stdout = child.stdout.take().ok_or("Claude Code opened without a stdout")?;
     let stderr = child.stderr.take().ok_or("Claude Code opened without a stderr")?;
 
-    let text = stdin_text.to_owned();
+    let text = run.briefing.clone();
     let writer = std::thread::spawn(move || {
         let _ = stdin.write_all(text.as_bytes());
     });
@@ -241,6 +304,71 @@ mod tests {
         dir
     }
 
+    fn a_run() -> Run {
+        Run {
+            workflow: "ping".into(),
+            model: "haiku".into(),
+            system: "s".into(),
+            briefing: "briefing\r\n".into(),
+            schema: serde_json::json!({}),
+        }
+    }
+
+    #[test]
+    fn the_argv_is_fixed_and_only_the_run_s_text_goes_in() {
+        assert_eq!(
+            argv(&a_run()).unwrap(),
+            vec![
+                "-p",
+                "--output-format",
+                "stream-json",
+                "--verbose",
+                "--include-partial-messages",
+                "--json-schema",
+                "{}",
+                "--model",
+                "haiku",
+                "--system-prompt",
+                "s",
+                "--tools",
+                "StructuredOutput",
+                "--strict-mcp-config",
+                "--no-session-persistence",
+                "--setting-sources",
+                "",
+            ]
+        );
+        // A rubric that begins with a dash, or reads like a flag, is still a value: commander takes the next word after --system-prompt whatever it is.
+        let mut run = a_run();
+        run.system = "--dangerously-skip-permissions".into();
+        assert_eq!(argv(&run).unwrap()[10], "--dangerously-skip-permissions");
+    }
+
+    #[test]
+    fn a_model_that_is_not_a_name_is_refused_and_so_is_a_run_with_more_in_it() {
+        for bad in ["", "--dangerously-skip-permissions", "-p", "haiku & calc", "haiku\"", "haiku sonnet", "a\n"] {
+            let mut run = a_run();
+            run.model = bad.into();
+            let err = argv(&run).unwrap_err();
+            assert!(err.ends_with("is not a model name Claude Code takes"), "{bad:?}: {err}");
+        }
+        for good in ["haiku", "claude-haiku-4-5-20251001", "claude-sonnet-4-5[1m]", "opus_4.1"] {
+            let mut run = a_run();
+            run.model = good.into();
+            assert!(argv(&run).is_ok(), "{good}");
+        }
+        let mut run = a_run();
+        run.schema = serde_json::json!([]);
+        assert_eq!(argv(&run).unwrap_err(), "The run's schema is not a JSON object");
+
+        let extra = serde_json::from_str::<Run>(
+            r#"{"workflow":"ping","model":"haiku","system":"s","briefing":"b","schema":{},"argv":["-p"]}"#,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(extra.contains("unknown field `argv`"), "{extra}");
+    }
+
     #[test]
     fn resolves_like_where_does() {
         let first = temp("resolve-a");
@@ -258,19 +386,16 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
-    fn a_script_stand_in_runs_with_its_argv_and_stdin_and_reports_its_exit() {
+    fn a_script_stand_in_runs_with_the_run_s_argv_and_briefing_and_reports_its_exit() {
         let dir = temp("spawn");
         let script = dir.join("claude.cmd");
         std::fs::write(&script, "@echo off\r\nset /p line=\r\necho out %1 %2 %line%\r\necho err 1>&2\r\nexit /b 3\r\n").unwrap();
         let runs = Runs::default();
         let seen = Arc::new(Mutex::new(Vec::new()));
         let sink = seen.clone();
-        let result = spawn(&script, &["-p".into(), "x".into()], "briefing\r\n", &dir, &runs, "run-1", move |line| {
-            sink.lock().unwrap().push(line.to_string())
-        })
-        .unwrap();
-        assert_eq!(result.stdout.trim(), "out -p x briefing");
-        assert_eq!(seen.lock().unwrap().as_slice(), ["out -p x briefing"]);
+        let result = spawn(&script, &a_run(), &dir, &runs, "run-1", move |line| sink.lock().unwrap().push(line.to_string())).unwrap();
+        assert_eq!(result.stdout.trim(), "out -p --output-format briefing");
+        assert_eq!(seen.lock().unwrap().as_slice(), ["out -p --output-format briefing"]);
         assert_eq!(result.stderr.trim(), "err");
         assert_eq!(result.exit_code, 3);
         assert!(runs.0.lock().unwrap().is_empty());

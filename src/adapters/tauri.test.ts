@@ -235,17 +235,20 @@ describe('tauriRunner', () => {
     invoke.mockResolvedValueOnce({ stdout: '{}', stderr: '', exitCode: 0 })
     const runner = tauriRunner()
     const controller = new AbortController()
-    const result = await runner.spawnClaude(['-p'], 'briefing', { signal: controller.signal })
+    const ping = { workflow: 'ping', model: 'haiku', system: 's', briefing: 'briefing', schema: {} }
+    const result = await runner.spawnClaude(ping, { signal: controller.signal })
     expect(result).toEqual({ stdout: '{}', stderr: '', exitCode: 0 })
-    const [command, args] = invoke.mock.calls[0] as [string, { runId: string; argv: string[]; stdin: string }]
+    const [command, args] = invoke.mock.calls[0] as [string, { runId: string; run: typeof ping }]
     expect(command).toBe('spawn_claude')
-    expect(args).toMatchObject({ argv: ['-p'], stdin: 'briefing' })
+    // The run goes over as it is — five fields, no argv; the shell builds the command line.
+    expect(args).toMatchObject({ run: ping })
+    expect(Object.keys(args).sort()).toEqual(['run', 'runId'])
     expect(typeof args.runId).toBe('string')
 
     invoke.mockImplementationOnce(() => new Promise(() => {}))
     invoke.mockResolvedValueOnce(undefined)
     const abortable = new AbortController()
-    void runner.spawnClaude(['-p'], '', { signal: abortable.signal })
+    void runner.spawnClaude(ping, { signal: abortable.signal })
     abortable.abort()
     await Promise.resolve()
     const cancel = invoke.mock.calls.find(([c]) => c === 'cancel_claude') as [string, { runId: string }] | undefined
@@ -277,7 +280,7 @@ describe('tauriRunner streaming', () => {
       return { stdout: '{"type":"result"}\n', stderr: '', exitCode: 0 }
     })
     const lines: string[] = []
-    const result = await tauriRunner().spawnClaude(['-p'], 'briefing', { onLine: (line) => lines.push(line) })
+    const result = await tauriRunner().spawnClaude({ workflow: 'ping', model: 'haiku', system: 's', briefing: 'briefing', schema: {} }, { onLine: (line) => lines.push(line) })
     expect(result.exitCode).toBe(0)
     expect(lines).toEqual(['{"type":"result"}'])
     expect(unlisten).toHaveBeenCalled()

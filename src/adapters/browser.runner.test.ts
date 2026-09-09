@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { afterEach, describe, expect, test } from 'vitest'
 import { createAssistant } from '../../scripts/assistant.mjs'
+import type { ClaudeRun } from '../assistant/claudeCode'
 import { run } from '../assistant/runner'
 import { helperRunner } from './browser'
 
@@ -14,7 +15,9 @@ import { helperRunner } from './browser'
 let server: ReturnType<typeof createAssistant> | undefined
 afterEach(() => server?.close())
 
-async function start(spawn: (argv: string[], stdin: string, opts: { onLine?: (line: string) => void; signal?: AbortSignal }) => Promise<{ stdout: string; stderr: string; exitCode: number }>) {
+const ping: ClaudeRun = { workflow: 'ping', model: 'haiku', system: 's', briefing: 'briefing', schema: {} }
+
+async function start(spawn: (run: ClaudeRun, opts: { onLine?: (line: string) => void; signal?: AbortSignal }) => Promise<{ stdout: string; stderr: string; exitCode: number }>) {
   server = createAssistant({ spawn, version: async () => '2.1.215', auth: async () => '{"loggedIn":true}', origins: ['http://localhost:5173'] })
   await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', () => resolve()))
   const address = server.address() as { port: number }
@@ -28,7 +31,7 @@ describe('the browser runner over the helper', () => {
       '{"type":"stream_event","event":{"type":"content_block_start","content_block":{"type":"tool_use"}}}',
       '{"type":"result","subtype":"success","structured_output":{"echo":"Embers"}}',
     ]
-    const base = await start(async (_argv, _stdin, { onLine }) => {
+    const base = await start(async (_run, { onLine }) => {
       for (const line of lines) {
         onLine?.(line)
         await new Promise((resolve) => setTimeout(resolve, 5))
@@ -36,7 +39,7 @@ describe('the browser runner over the helper', () => {
       return { stdout: `${lines.join('\n')}\n`, stderr: '', exitCode: 0 }
     })
     const seen: string[] = []
-    const result = await helperRunner(base).spawnClaude(['-p'], 'briefing', { onLine: (line) => seen.push(line) })
+    const result = await helperRunner(base).spawnClaude(ping, { onLine: (line) => seen.push(line) })
     expect(seen).toEqual(lines)
     expect(result).toEqual({ stdout: `${lines.join('\n')}\n`, stderr: '', exitCode: 0 })
 
@@ -57,6 +60,6 @@ describe('the browser runner over the helper', () => {
     const base = await start(async () => {
       throw new Error('Claude Code not found on PATH')
     })
-    await expect(helperRunner(base).spawnClaude(['-p'], 'briefing')).rejects.toThrow('Claude Code not found on PATH')
+    await expect(helperRunner(base).spawnClaude(ping)).rejects.toThrow('Claude Code not found on PATH')
   })
 })

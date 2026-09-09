@@ -385,19 +385,20 @@ async function readLines(response: Response, onLine: (line: string) => void): Pr
 }
 const HELPER_DOWN = 'The assistant helper is not running — in a terminal at the project, run pnpm assistant and leave it running.'
 const HELPER_OLD = 'The assistant helper is from an older build — stop it and run pnpm assistant again.'
-/** What this page expects the helper to speak; scripts/assistant.mjs carries the same number. */
-const HELPER_PROTOCOL = 2
+/** What this page expects the helper to speak; scripts/assistant.mjs carries the same number. 3: the page sends a run, not an argv. */
+const HELPER_PROTOCOL = 3
 
 /**
  * A page cannot spawn anything, so the browser build asks the helper in
- * scripts/assistant.mjs to. The helper spawns claude and nothing else.
+ * scripts/assistant.mjs to. The helper builds the command line from the
+ * run itself and spawns claude, and nothing else.
  */
 export function helperRunner(base: string = HELPER_URL, fetchFn: typeof fetch = (...args) => fetch(...args)): ProcessRunner {
   let counter = 0
   return {
     kind: 'browser',
 
-    async spawnClaude(argv, stdin, opts) {
+    async spawnClaude(run, opts) {
       const runId = `${Date.now()}-${++counter}`
       const onAbort = () =>
         void fetchFn(`${base}/cancel`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ runId }) }).catch(() => {})
@@ -407,7 +408,7 @@ export function helperRunner(base: string = HELPER_URL, fetchFn: typeof fetch = 
         response = await fetchFn(`${base}/spawn`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ argv, stdin, runId }),
+          body: JSON.stringify({ run, runId }),
         })
       } catch {
         opts?.signal?.removeEventListener('abort', onAbort)

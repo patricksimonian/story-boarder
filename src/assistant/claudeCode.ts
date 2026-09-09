@@ -1,18 +1,19 @@
 /**
- * Everything that knows what `claude -p` looks like, in one place. Both
- * platforms spawn the writer's own Claude Code with the argv built here
- * and hand its output back to the parsers here; nothing else in the app
- * knows a flag, a model name, or an event shape.
+ * What the page knows about a `claude -p` run: the shape of a run, and
+ * how to read what comes back. The page never builds the argv. It sends
+ * a run — the workflow, the model, the rubric, the briefing, the schema
+ * — and the side that can spawn a process (the desktop shell in
+ * src-tauri/src/assistant.rs, the helper in scripts/assistant.mjs)
+ * turns that into a command line whose every flag is fixed there. So
+ * nothing the page sends can become a flag, and a page that has been
+ * taken over, or anything else that reaches the shell or the helper,
+ * can ask the writer's Claude Code one question and no more: no tool,
+ * no folder, no permission the app never had.
  *
- * The command asks for one schema-validated JSON answer, streamed as it
- * is made (`--output-format stream-json`), so the app can say whether
- * Claude Code is connecting, thinking, or writing, and how much it has
- * written. It keeps nothing on disk and loads none of the writer's own
- * settings. It is not `--bare`, because bare mode never reads the
- * subscription login. The only tool left is StructuredOutput, which is
- * how Claude Code delivers the schema-shaped answer: removing every tool
- * removes that one too, and the first real run spent five turns being
- * refused it.
+ * The run asks for one schema-validated JSON answer, streamed as it is
+ * made, so the app can say whether Claude Code is connecting, thinking,
+ * or writing, and how much it has written. The parsers below read that
+ * stream and its last line.
  */
 
 export type JsonSchema = Record<string, unknown>
@@ -57,26 +58,15 @@ export class RunnerFailure extends Error {
   }
 }
 
-/** The model comes from the story's settings; an alias Claude Code resolves, or a full name. */
-export function claudeArgs(request: WorkflowRequest, model: string): string[] {
-  return [
-    '-p',
-    '--output-format',
-    'stream-json',
-    '--verbose',
-    '--include-partial-messages',
-    '--json-schema',
-    JSON.stringify(request.schema),
-    '--model',
-    model,
-    '--system-prompt',
-    request.system,
-    '--tools',
-    'StructuredOutput',
-    '--no-session-persistence',
-    '--setting-sources',
-    '',
-  ]
+/**
+ * A run, as the page sends it: a workflow request and the model from the
+ * story's settings, an alias Claude Code resolves (`haiku`) or a full
+ * name. These five fields are all the page can say about a run. The
+ * shell and the helper each check the model is a name before it goes
+ * anywhere near a command line; the rest is text Claude Code reads.
+ */
+export interface ClaudeRun extends WorkflowRequest {
+  model: string
 }
 
 interface ClaudeResultJson {

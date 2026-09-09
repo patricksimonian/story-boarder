@@ -1,14 +1,15 @@
 import type { ProcessRunner } from '../adapters/types'
-import { claudeArgs, NO_PROGRESS, parseClaudeResult, readProgressLine, RunnerFailure, type Progress, type WorkflowRequest, type WorkflowResult } from './claudeCode'
+import { NO_PROGRESS, parseClaudeResult, readProgressLine, RunnerFailure, type Progress, type WorkflowRequest, type WorkflowResult } from './claudeCode'
 
 /** How long Claude Code may go without a word before it is stopped and said to have gone quiet. */
 export const QUIET_TIMEOUT_MS = 180_000
 
 /**
- * One workflow request, start to finish: the argv from claudeCode, the
- * briefing on stdin, the streamed lines folded into progress the caller
- * can show, the answer parsed off the last line. The runner is the
- * platform's way of spawning a process and nothing more. A run that goes
+ * One workflow request, start to finish: the request and the model
+ * handed to the runner as a run, the streamed lines folded into
+ * progress the caller can show, the answer parsed off the last line.
+ * The runner is the platform's way of spawning a process and nothing
+ * more; the command line is built on the far side of it. A run that goes
  * quiet for too long is killed and fails with a sentence, so nothing
  * waits forever on an API retrying behind the scenes; a run the writer
  * cancels fails with "Cancelled." and no more.
@@ -47,7 +48,7 @@ export async function run<T>(
 
   let result
   try {
-    result = await runner.spawnClaude(claudeArgs(request, opts.model), request.briefing, { signal: controller.signal, workflow: request.workflow, onLine })
+    result = await runner.spawnClaude({ ...request, model: opts.model }, { signal: controller.signal, onLine })
   } catch (error) {
     if (wentQuiet) throw new RunnerFailure(quiet(quietMs, progress))
     if (controller.signal.aborted) throw new RunnerFailure('Cancelled.')

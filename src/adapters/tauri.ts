@@ -210,7 +210,7 @@ export function tauriRunner(): ProcessRunner {
   return {
     kind: 'desktop',
 
-    async spawnClaude(argv, stdin, opts) {
+    async spawnClaude(run, opts) {
       const runId = `${Date.now()}-${++counter}`
       const onAbort = () => void invoke('cancel_claude', { runId }).catch(() => {})
       opts?.signal?.addEventListener('abort', onAbort)
@@ -220,7 +220,7 @@ export function tauriRunner(): ProcessRunner {
           })
         : undefined
       try {
-        return await call<ProcessResult>('spawn_claude', { runId, argv, stdin })
+        return await call<ProcessResult>('spawn_claude', { runId, run })
       } finally {
         opts?.signal?.removeEventListener('abort', onAbort)
         stop?.()

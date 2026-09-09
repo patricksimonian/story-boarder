@@ -7,6 +7,8 @@
  * All paths are relative to the story folder root, forward-slashed.
  */
 
+import type { ClaudeRun } from '../assistant/claudeCode'
+
 export interface FileAccess {
   readText(path: string): Promise<string>
   writeText(path: string, contents: string): Promise<void>
@@ -124,13 +126,15 @@ export interface Platform {
  * How the app reaches the writer's own Claude Code: by spawning it. What
  * differs per platform is only how a process gets spawned — the desktop
  * shell runs it, a browser tab asks a helper on localhost to — so that is
- * all the seam carries. `src/assistant/` owns the argv and the parsing.
+ * all the seam carries. The page sends a run and never an argv: the
+ * side that spawns turns the run into the fixed command line, so nothing
+ * from the page can become a flag. `src/assistant/` owns the parsing.
  */
 export interface ProcessRunner {
   /** Which way this build reaches Claude Code — the Settings view says so. */
   kind: 'desktop' | 'browser'
-  /** Spawns `claude` with argv, writes stdin, resolves when it exits. */
-  spawnClaude(argv: string[], stdin: string, opts?: SpawnOptions): Promise<ProcessResult>
+  /** Spawns `claude` for one run, the briefing on its stdin, and resolves when it exits. */
+  spawnClaude(run: ClaudeRun, opts?: SpawnOptions): Promise<ProcessResult>
   /** `claude --version`, or why it can't be run. */
   status(): Promise<RunnerStatus>
   /** `claude auth status --json`: signed in and on what plan, or not. */
@@ -162,8 +166,6 @@ export function readAuthJson(text: string): AuthStatus {
 
 export interface SpawnOptions {
   signal?: AbortSignal
-  /** The workflow's name — nothing to a real runner; the stub answers by it. */
-  workflow?: string
   /** Each line Claude Code prints, as it prints it: the stream the app reads progress off. */
   onLine?: (line: string) => void
 }

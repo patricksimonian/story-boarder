@@ -125,7 +125,7 @@ function diskFiles(root: string): FileAccess {
 /** The writer's own Claude Code, spawned the way the helper spawns it, with no server between. */
 const runner: ProcessRunner = {
   kind: 'browser',
-  spawnClaude: (argv, stdin, opts) => spawnClaude(argv, stdin, opts),
+  spawnClaude: (run, opts) => spawnClaude(run, opts),
   status: async () => ({ kind: 'ready', detail: 'eval' }),
   auth: async () => ({ kind: 'signed-in' }),
 }

@@ -227,17 +227,19 @@ fn log_error(message: String) {
     log::error!(target: "webview", "{message}");
 }
 
-/// Runs the writer's own Claude Code once, with the app's data directory
-/// as its working directory — never the story folder, so there is
-/// nothing for the model to read even if a tool slipped through.
+/// Runs the writer's own Claude Code once for a run the page sends —
+/// workflow, model, rubric, briefing, schema, and nothing else; the
+/// command line is built in assistant.rs, never by the page — with the
+/// app's data directory as its working directory: never the story
+/// folder, so there is nothing for the model to read even if a tool
+/// slipped through.
 #[tauri::command]
 async fn spawn_claude<R: tauri::Runtime>(
     app: AppHandle<R>,
     runs: State<'_, assistant::Runs>,
     claude: State<'_, assistant::ClaudePath>,
     run_id: String,
-    argv: Vec<String>,
-    stdin: String,
+    run: assistant::Run,
 ) -> Result<assistant::ProcessResult, String> {
     let binary = claude.locate()?;
     let cwd = app.path().app_data_dir().map_err(|e| e.to_string())?;
@@ -246,7 +248,7 @@ async fn spawn_claude<R: tauri::Runtime>(
     let emitter = app.clone();
     let id_for_lines = run_id.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        assistant::spawn(&binary, &argv, &stdin, &cwd, &runs, &run_id, move |line| {
+        assistant::spawn(&binary, &run, &cwd, &runs, &run_id, move |line| {
             let _ = emitter.emit("claude-line", serde_json::json!({ "runId": id_for_lines, "line": line }));
         })
     })
@@ -473,7 +475,7 @@ mod ipc {
 
     #[cfg(windows)]
     #[test]
-    fn claude_is_spawned_with_the_page_side_argument_names_and_cancelled_by_id() {
+    fn claude_is_spawned_for_a_run_refused_anything_else_and_cancelled_by_id() {
         let shell = Shell::open("claude");
         let script = shell.dir.join("claude.cmd");
         std::fs::write(
@@ -487,13 +489,23 @@ mod ipc {
             shell.call("claude_auth", serde_json::json!({})).unwrap(),
             "{\"loggedIn\":true,\"subscriptionType\":\"max\"}"
         );
-        let result = shell
-            .call("spawn_claude", serde_json::json!({ "runId": "r1", "argv": ["-p"], "stdin": "hello\r\n" }))
-            .unwrap();
+        let run = serde_json::json!({ "workflow": "ping", "model": "haiku", "system": "s", "briefing": "hello\r\n", "schema": {} });
+        let result = shell.call("spawn_claude", serde_json::json!({ "runId": "r1", "run": run })).unwrap();
         assert_eq!(result["exitCode"], 0);
         assert_eq!(result["stdout"].as_str().unwrap().trim(), "ran -p hello");
         // Cancelling a run that has already ended is nothing to report.
         shell.call("cancel_claude", serde_json::json!({ "runId": "r1" })).unwrap();
+
+        // The page cannot name a flag: a model that is one is refused, and
+        // so is a run carrying an argv of its own, before anything is spawned.
+        let mut flag = run.clone();
+        flag["model"] = serde_json::json!("--dangerously-skip-permissions");
+        let refused = shell.call("spawn_claude", serde_json::json!({ "runId": "r2", "run": flag })).unwrap_err();
+        assert!(refused.ends_with("is not a model name Claude Code takes"), "{refused}");
+        let mut extra = run.clone();
+        extra["argv"] = serde_json::json!(["-p", "--tools", "Bash"]);
+        let refused = shell.call("spawn_claude", serde_json::json!({ "runId": "r3", "run": extra })).unwrap_err();
+        assert!(refused.contains("argv"), "{refused}");
     }
 
     #[test]

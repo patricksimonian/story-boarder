@@ -11,7 +11,7 @@ describe('the health check', () => {
       kind: 'passed',
       detail: 'Claude Code 2.1.215 · signed in as p@example.com, max plan · haiku answers',
     })
-    expect(runner.calls[0].argv).toContain('haiku')
+    expect(runner.calls[0].model).toBe('haiku')
   })
 
   test('says tersely what is wrong, first thing first', async () => {

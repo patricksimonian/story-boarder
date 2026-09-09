@@ -286,12 +286,12 @@ describe('the scene read', () => {
     const runner = new StubProcessRunner()
     const answerNormally = runner.spawnClaude.bind(runner)
     // The read hangs until it is cancelled; the health check's ping still answers.
-    runner.spawnClaude = (argv, stdin, opts) =>
-      opts?.workflow === 'read-scene'
+    runner.spawnClaude = (run, opts) =>
+      run.workflow === 'read-scene'
         ? new Promise((resolve) => {
-            opts.signal?.addEventListener('abort', () => resolve({ stdout: '', stderr: '', exitCode: 143 }))
+            opts?.signal?.addEventListener('abort', () => resolve({ stdout: '', stderr: '', exitCode: 143 }))
           })
-        : answerNormally(argv, stdin, opts)
+        : answerNormally(run, opts)
     await openStory(world, runner)
     const editor = await openCistern()
     const read = await within(editor).findByRole('button', { name: 'Read' })

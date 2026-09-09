@@ -62,7 +62,7 @@ describe('the continuity check', () => {
     expect(checks(runner)).toHaveLength(1)
     expect(checks(runner)[0].stdin).toContain('## 1. Cold Open: Lowmarket (cold-open)')
     expect(checks(runner)[0].stdin).toContain('## 3. Ashes or Embers (embers)')
-    expect(checks(runner)[0].argv).toContain('opus')
+    expect(checks(runner)[0].model).toBe('opus')
     expect(screen.getByRole('button', { name: new RegExp(`✓ analysis \\(${before + 1}\\)`, 'i') })).toBeInTheDocument()
 
     await userEvent.click(coach.getByRole('button', { name: /1 finding in Analysis/ }))

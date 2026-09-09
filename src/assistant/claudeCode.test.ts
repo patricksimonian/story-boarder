@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { StubProcessRunner } from '../adapters/stubs'
-import { claudeArgs, parseClaudeResult, phaseWord, RunnerFailure, type Progress, type WorkflowRequest } from './claudeCode'
+import { parseClaudeResult, phaseWord, RunnerFailure, type Progress, type WorkflowRequest } from './claudeCode'
 import { pingRequest, run } from './runner'
 
 const request: WorkflowRequest = {
@@ -10,30 +10,6 @@ const request: WorkflowRequest = {
   schema: { type: 'object', properties: { echo: { type: 'string' } }, required: ['echo'] },
 }
 
-describe('claudeArgs', () => {
-  test('one validated JSON answer, only the output tool left, nothing kept, no settings loaded, not bare', () => {
-    expect(claudeArgs(request, 'haiku')).toEqual([
-      '-p',
-      '--output-format',
-      'stream-json',
-      '--verbose',
-      '--include-partial-messages',
-      '--json-schema',
-      '{"type":"object","properties":{"echo":{"type":"string"}},"required":["echo"]}',
-      '--model',
-      'haiku',
-      '--system-prompt',
-      'Echo the title.',
-      '--tools',
-      'StructuredOutput',
-      '--no-session-persistence',
-      '--setting-sources',
-      '',
-    ])
-    expect(claudeArgs(request, 'opus')).toContain('opus')
-    expect(claudeArgs(request, 'haiku')).not.toContain('--bare')
-  })
-})
 
 describe('parseClaudeResult', () => {
   test('exit zero with structured_output is the answer, with usage', () => {
@@ -81,7 +57,7 @@ describe('parseClaudeResult', () => {
 })
 
 describe('run', () => {
-  test('composes argv and stdin for the runner and parses what comes back', async () => {
+  test('hands the runner a run — the request and the model — and parses what comes back', async () => {
     const runner = new StubProcessRunner()
     runner.answerWith('ping', { echo: 'Embers' })
     const result = await run<{ echo: string }>(runner, pingRequest('Embers'), { model: 'haiku' })
@@ -89,7 +65,8 @@ describe('run', () => {
     expect(runner.calls).toHaveLength(1)
     expect(runner.calls[0].workflow).toBe('ping')
     expect(runner.calls[0].stdin).toBe('Story title: Embers')
-    expect(runner.calls[0].argv.slice(0, 3)).toEqual(['-p', '--output-format', 'stream-json'])
+    expect(runner.calls[0].model).toBe('haiku')
+    expect(runner.calls[0].run).toEqual({ ...pingRequest('Embers'), model: 'haiku' })
   })
 
   test('a runner that cannot spawn at all fails with its reason', async () => {
@@ -103,7 +80,7 @@ describe('run', () => {
   test('a run that outlives its timeout is stopped and says so; a cancelled one says only that', async () => {
     const runner = new StubProcessRunner()
     let seen: AbortSignal | undefined
-    runner.spawnClaude = (_argv, _stdin, opts) =>
+    runner.spawnClaude = (_run, opts) =>
       new Promise((resolve) => {
         seen = opts?.signal
         opts?.signal?.addEventListener('abort', () => resolve({ stdout: '', stderr: '', exitCode: 143 }))
