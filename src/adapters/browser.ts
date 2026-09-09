@@ -346,6 +346,41 @@ export function browserPlatform(): Platform {
 }
 
 export const HELPER_URL = 'http://127.0.0.1:7311'
+
+/** Reads the helper's line-per-JSON stream: `{line}` as they come, then `{done}` or `{error}`. */
+async function readLines(response: Response, onLine: (line: string) => void): Promise<{ done?: Partial<ProcessResult>; error?: string }> {
+  const outcome: { done?: Partial<ProcessResult>; error?: string } = {}
+  const take = (raw: string) => {
+    if (!raw.trim()) return
+    let parsed: { line?: string; done?: Partial<ProcessResult>; error?: string }
+    try {
+      parsed = JSON.parse(raw) as typeof parsed
+    } catch {
+      return
+    }
+    if (typeof parsed.line === 'string') onLine(parsed.line)
+    if (parsed.done) outcome.done = parsed.done
+    if (typeof parsed.error === 'string') outcome.error = parsed.error
+  }
+  if (!response.body) {
+    for (const raw of (await response.text()).split(/\r?\n/)) take(raw)
+    return outcome
+  }
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffered = ''
+  for (;;) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffered += decoder.decode(value, { stream: true })
+    const parts = buffered.split(/\r?\n/)
+    buffered = parts.pop() ?? ''
+    for (const raw of parts) take(raw)
+  }
+  buffered += decoder.decode()
+  take(buffered)
+  return outcome
+}
 const HELPER_DOWN = 'The assistant helper is not running — in a terminal at the project, run pnpm assistant and leave it running.'
 
 /**
@@ -370,13 +405,20 @@ export function helperRunner(base: string = HELPER_URL, fetchFn: typeof fetch = 
           body: JSON.stringify({ argv, stdin, runId }),
         })
       } catch {
+        opts?.signal?.removeEventListener('abort', onAbort)
         throw new Error(HELPER_DOWN)
+      }
+      try {
+        // The helper answers with one JSON object per line: the lines Claude
+        // Code prints as it prints them, then the ending.
+        const text = await readLines(response, (line) => opts?.onLine?.(line))
+        const ending = text.done ?? {}
+        if (text.error) throw new Error(text.error)
+        if (!response.ok || typeof ending.stdout !== 'string') throw new Error(text.error ?? `The assistant helper answered ${response.status}.`)
+        return { stdout: ending.stdout, stderr: ending.stderr ?? '', exitCode: ending.exitCode ?? -1 }
       } finally {
         opts?.signal?.removeEventListener('abort', onAbort)
       }
-      const body = (await response.json().catch(() => ({}))) as Partial<ProcessResult> & { error?: string }
-      if (!response.ok || typeof body.stdout !== 'string') throw new Error(body.error ?? `The assistant helper answered ${response.status}.`)
-      return { stdout: body.stdout, stderr: body.stderr ?? '', exitCode: body.exitCode ?? -1 }
     },
 
     async status() {

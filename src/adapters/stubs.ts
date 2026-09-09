@@ -155,6 +155,13 @@ export class StubProcessRunner implements ProcessRunner {
   async spawnClaude(argv: string[], stdin: string, opts?: SpawnOptions): Promise<ProcessResult> {
     this.calls.push({ workflow: opts?.workflow, argv, stdin })
     const canned = this.canned.get(opts?.workflow ?? '')
+    const result = await this.ending(canned, stdin, opts)
+    // What a real spawner does: every line of stdout, as it is printed.
+    if (opts?.onLine) for (const line of result.stdout.split(/\r?\n/)) if (line.trim()) opts.onLine(line)
+    return result
+  }
+
+  private async ending(canned: Canned | undefined, stdin: string, opts?: SpawnOptions): Promise<ProcessResult> {
     if (!canned && opts?.workflow === 'ping') {
       // The health check pings; a stub answers it unless a test says otherwise.
       const echo = stdin.replace(/^Story title: /, '')

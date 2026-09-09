@@ -40,8 +40,8 @@ export function locateClaude(env = process.env) {
   return null
 }
 
-/** Spawns claude with argv, writes stdin, resolves with what it printed and how it exited. */
-export function spawnClaude(argv, stdin, { signal } = {}) {
+/** Spawns claude with argv, writes stdin, hands each stdout line to onLine as it comes, and resolves with what it printed and how it exited. */
+export function spawnClaude(argv, stdin, { signal, onLine } = {}) {
   return new Promise((resolve, reject) => {
     const found = locateClaude()
     if (!found) {
@@ -60,10 +60,21 @@ export function spawnClaude(argv, stdin, { signal } = {}) {
     })
     let stdout = ''
     let stderr = ''
-    child.stdout.setEncoding('utf8').on('data', (chunk) => (stdout += chunk))
+    let pending = ''
+    child.stdout.setEncoding('utf8').on('data', (chunk) => {
+      stdout += chunk
+      if (!onLine) return
+      pending += chunk
+      const parts = pending.split(/\r?\n/)
+      pending = parts.pop() ?? ''
+      for (const line of parts) if (line.trim()) onLine(line)
+    })
     child.stderr.setEncoding('utf8').on('data', (chunk) => (stderr += chunk))
     child.on('error', reject)
-    child.on('close', (code) => resolve({ stdout, stderr, exitCode: code ?? -1 }))
+    child.on('close', (code) => {
+      if (onLine && pending.trim()) onLine(pending)
+      resolve({ stdout, stderr, exitCode: code ?? -1 })
+    })
     signal?.addEventListener('abort', () => child.kill())
     child.stdin.end(stdin)
   })
@@ -147,15 +158,24 @@ export function createAssistant({ spawn: spawnFn = spawnClaude, version = claude
       if (typeof body.runId === 'string') runs.set(body.runId, controller)
       const started = Date.now()
       const model = body.argv[body.argv.indexOf('--model') + 1] ?? '?'
+      // One JSON object per line: the lines Claude Code prints as it prints
+      // them, then the ending — so the page can say what is happening.
+      res.writeHead(200, {
+        'content-type': 'application/x-ndjson',
+        'cache-control': 'no-store',
+        ...(origin && origins.includes(origin) ? { 'access-control-allow-origin': origin, 'access-control-allow-headers': 'content-type' } : {}),
+      })
+      const send = (obj) => res.write(`${JSON.stringify(obj)}\n`)
       try {
-        const result = await spawnFn(body.argv, body.stdin, { signal: controller.signal })
+        const result = await spawnFn(body.argv, body.stdin, { signal: controller.signal, onLine: (line) => send({ line }) })
         log(`run ${model}: ${((Date.now() - started) / 1000).toFixed(1)}s, exit ${result.exitCode}${describe(result.stdout)}`)
-        answer(200, result)
+        send({ done: result })
       } catch (error) {
         log(`run ${model}: ${((Date.now() - started) / 1000).toFixed(1)}s, failed: ${error.message}`)
-        answer(500, { error: error.message })
+        send({ error: error.message })
       } finally {
         if (typeof body.runId === 'string') runs.delete(body.runId)
+        res.end()
       }
       return
     }
@@ -170,7 +190,8 @@ function log(line) {
 
 function describe(stdout) {
   try {
-    const j = JSON.parse(stdout)
+    const last = stdout.trim().split(/\r?\n/).filter(Boolean).pop() ?? ''
+    const j = JSON.parse(last)
     const parts = []
     if (j.num_turns) parts.push(`${j.num_turns} turns`)
     if (j.usage?.output_tokens) parts.push(`${j.usage.output_tokens} out tokens`)

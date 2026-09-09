@@ -214,10 +214,16 @@ export function tauriRunner(): ProcessRunner {
       const runId = `${Date.now()}-${++counter}`
       const onAbort = () => void invoke('cancel_claude', { runId }).catch(() => {})
       opts?.signal?.addEventListener('abort', onAbort)
+      const stop = opts?.onLine
+        ? await listen<{ runId: string; line: string }>('claude-line', (event) => {
+            if (event.payload.runId === runId) opts.onLine?.(event.payload.line)
+          })
+        : undefined
       try {
         return await call<ProcessResult>('spawn_claude', { runId, argv, stdin })
       } finally {
         opts?.signal?.removeEventListener('abort', onAbort)
+        stop?.()
       }
     },
 

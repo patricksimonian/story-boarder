@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { StubProcessRunner } from '../adapters/stubs'
-import { claudeArgs, parseClaudeResult, RunnerFailure, type WorkflowRequest } from './claudeCode'
+import { claudeArgs, parseClaudeResult, phaseWord, RunnerFailure, type Progress, type WorkflowRequest } from './claudeCode'
 import { pingRequest, run } from './runner'
 
 const request: WorkflowRequest = {
@@ -15,7 +15,9 @@ describe('claudeArgs', () => {
     expect(claudeArgs(request, 'haiku')).toEqual([
       '-p',
       '--output-format',
-      'json',
+      'stream-json',
+      '--verbose',
+      '--include-partial-messages',
       '--json-schema',
       '{"type":"object","properties":{"echo":{"type":"string"}},"required":["echo"]}',
       '--model',
@@ -87,7 +89,7 @@ describe('run', () => {
     expect(runner.calls).toHaveLength(1)
     expect(runner.calls[0].workflow).toBe('ping')
     expect(runner.calls[0].stdin).toBe('Story title: Embers')
-    expect(runner.calls[0].argv.slice(0, 3)).toEqual(['-p', '--output-format', 'json'])
+    expect(runner.calls[0].argv.slice(0, 3)).toEqual(['-p', '--output-format', 'stream-json'])
   })
 
   test('a runner that cannot spawn at all fails with its reason', async () => {
@@ -106,13 +108,41 @@ describe('run', () => {
         seen = opts?.signal
         opts?.signal?.addEventListener('abort', () => resolve({ stdout: '', stderr: '', exitCode: 143 }))
       })
-    await expect(run(runner, request, { model: 'haiku', timeoutMs: 20 })).rejects.toThrow('Claude Code took too long and was stopped.')
+    await expect(run(runner, request, { model: 'haiku', quietMs: 20 })).rejects.toThrow('Claude Code said nothing for too long before it connected and was stopped.')
     expect(seen?.aborted).toBe(true)
 
     const controller = new AbortController()
     const pending = run(runner, request, { model: 'haiku', signal: controller.signal })
     controller.abort()
     await expect(pending).rejects.toThrow('Cancelled.')
+  })
+
+  test('the stream is folded into progress as it comes, and the answer is the last line', async () => {
+    const lines = [
+      JSON.stringify({ type: 'system', subtype: 'init' }),
+      JSON.stringify({ type: 'stream_event', event: { type: 'content_block_start', content_block: { type: 'thinking' } } }),
+      JSON.stringify({ type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: 'hmm hmm' } } }),
+      JSON.stringify({ type: 'stream_event', event: { type: 'content_block_start', content_block: { type: 'tool_use' } } }),
+      JSON.stringify({ type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'input_json_delta', partial_json: '{"echo":' } } }),
+      JSON.stringify({ type: 'stream_event', event: { type: 'message_delta', usage: { output_tokens: 61 } } }),
+      JSON.stringify({ type: 'result', subtype: 'success', structured_output: { echo: 'Embers' }, usage: { output_tokens: 61 } }),
+    ]
+    const runner = new StubProcessRunner()
+    runner.answer('ping', { stdout: `${lines.join('\n')}\n`, stderr: '', exitCode: 0 })
+    const seen: Progress[] = []
+    const result = await run<{ echo: string }>(runner, pingRequest('Embers'), { model: 'haiku', onProgress: (p) => seen.push(p) })
+    expect(result.output).toEqual({ echo: 'Embers' })
+    expect(result.usage?.outputTokens).toBe(61)
+    expect(seen.map((p) => [p.phase, p.chars, p.outputTokens ?? null])).toEqual([
+      ['connected', 0, null],
+      ['thinking', 0, null],
+      ['thinking', 7, null],
+      ['writing', 7, null],
+      ['writing', 15, null],
+      ['writing', 15, 61],
+      ['done', 15, 61],
+    ])
+    expect(phaseWord({ phase: 'thinking', chars: 0 })).toBe('thinking')
   })
 
   test('an unanswered workflow in a test says so rather than pretending', async () => {

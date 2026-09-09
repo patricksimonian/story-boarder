@@ -18,21 +18,29 @@ async function start(spawn, version = async () => '2.1.215', auth = async () => 
 }
 
 describe('the assistant helper', () => {
-  test('spawns with the argv and stdin it was sent and returns what came back', async () => {
+  test('spawns with the argv and stdin it was sent, streams each line as it comes, then the ending', async () => {
     const seen = []
-    const base = await start(async (argv, stdin) => {
+    const base = await start(async (argv, stdin, { onLine }) => {
       seen.push({ argv, stdin })
-      return { stdout: '{"structured_output":{"echo":"E"}}', stderr: '', exitCode: 0 }
+      onLine('{"type":"system"}')
+      onLine('{"type":"result","structured_output":{"echo":"E"}}')
+      return { stdout: '{"type":"system"}\n{"type":"result","structured_output":{"echo":"E"}}\n', stderr: '', exitCode: 0 }
     })
     const response = await fetch(`${base}/spawn`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: 'http://localhost:5173' },
-      body: JSON.stringify({ argv: ['-p', '--output-format', 'json'], stdin: 'Story title: E', runId: 'r1' }),
+      body: JSON.stringify({ argv: ['-p', '--output-format', 'stream-json'], stdin: 'Story title: E', runId: 'r1' }),
     })
     expect(response.status).toBe(200)
     expect(response.headers.get('access-control-allow-origin')).toBe('http://localhost:5173')
-    expect(await response.json()).toEqual({ stdout: '{"structured_output":{"echo":"E"}}', stderr: '', exitCode: 0 })
-    expect(seen).toEqual([{ argv: ['-p', '--output-format', 'json'], stdin: 'Story title: E' }])
+    expect(response.headers.get('content-type')).toBe('application/x-ndjson')
+    const lines = (await response.text()).trim().split('\n').map((l) => JSON.parse(l))
+    expect(lines).toEqual([
+      { line: '{"type":"system"}' },
+      { line: '{"type":"result","structured_output":{"echo":"E"}}' },
+      { done: { stdout: '{"type":"system"}\n{"type":"result","structured_output":{"echo":"E"}}\n', stderr: '', exitCode: 0 } },
+    ])
+    expect(seen).toEqual([{ argv: ['-p', '--output-format', 'stream-json'], stdin: 'Story title: E' }])
   })
 
   test('reports the version, or why there is none', async () => {
@@ -89,7 +97,8 @@ describe('the assistant helper', () => {
     })
     await new Promise((resolve) => setTimeout(resolve, 50))
     await fetch(`${base}/cancel`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ runId: 'slow' }) })
-    expect((await (await running).json()).exitCode).toBe(143)
+    const lines = (await (await running).text()).trim().split('\n').map((l) => JSON.parse(l))
+    expect(lines.at(-1).done.exitCode).toBe(143)
     expect(aborted).toBe(true)
   })
 })

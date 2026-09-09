@@ -3,6 +3,7 @@ import type { Note, Slug, Story, TargetKey } from '../domain/types'
 import type { MentionContext } from '../mentions/context'
 import type { Target } from '../mentions/match'
 import { NamedIn } from './NamedIn'
+import type { Progress } from '../assistant/claudeCode'
 import { ReadButton } from './ReadButton'
 import { ReadOutcome, type ReadInfo } from './ReadOutcome'
 import { ProseEditor } from './ProseEditor'
@@ -29,6 +30,7 @@ export function NotesView({
   onOpenTarget = () => { },
   canRead = false,
   reading = false,
+  progress,
   readProblem = null,
   onRead,
   onCancelRead,
@@ -47,6 +49,7 @@ export function NotesView({
   onOpenTarget?: (key: TargetKey) => void
   canRead?: boolean
   reading?: boolean
+  progress?: (Progress & { startedAt: number }) | undefined
   readProblem?: string | null
   onRead?: () => void
   onCancelRead?: () => void
@@ -199,7 +202,7 @@ export function NotesView({
             </label>
             {onRead && (
               <div className="notes-readrow">
-                <ReadButton what="note" className="" canRead={canRead} reading={reading} readProblem={readProblem} onRead={onRead} onCancel={onCancelRead} />
+                <ReadButton what="note" progress={progress} className="" canRead={canRead} reading={reading} readProblem={readProblem} onRead={onRead} onCancel={onCancelRead} />
               </div>
             )}
             <ReadOutcome read={read} />

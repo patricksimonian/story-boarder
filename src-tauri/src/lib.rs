@@ -13,7 +13,7 @@ use serde::Serialize;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 
@@ -243,9 +243,15 @@ async fn spawn_claude<R: tauri::Runtime>(
     let cwd = app.path().app_data_dir().map_err(|e| e.to_string())?;
     std::fs::create_dir_all(&cwd).map_err(|e| format!("Could not create {}: {e}", cwd.display()))?;
     let runs = runs.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || assistant::spawn(&binary, &argv, &stdin, &cwd, &runs, &run_id))
-        .await
-        .map_err(|e| e.to_string())?
+    let emitter = app.clone();
+    let id_for_lines = run_id.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        assistant::spawn(&binary, &argv, &stdin, &cwd, &runs, &run_id, move |line| {
+            let _ = emitter.emit("claude-line", serde_json::json!({ "runId": id_for_lines, "line": line }));
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

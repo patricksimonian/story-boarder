@@ -5,6 +5,7 @@ import { insertBeat, moveBeat, removeBeat, setBeat } from '../editor/beats'
 import type { MentionContext } from '../mentions/context'
 import type { Target } from '../mentions/match'
 import { NamedIn } from './NamedIn'
+import type { Progress } from '../assistant/claudeCode'
 import { ReadButton } from './ReadButton'
 import { ReadOutcome, type ReadInfo } from './ReadOutcome'
 import type { Placement } from '../story/mutations'
@@ -37,6 +38,7 @@ export function SceneEditor({
   onOpenTarget = () => {},
   canRead = false,
   reading = false,
+  progress,
   readProblem = null,
   onRead,
   onCancelRead,
@@ -66,6 +68,7 @@ export function SceneEditor({
   canRead?: boolean
   /** A read of this scene is in flight. */
   reading?: boolean
+  progress?: (Progress & { startedAt: number }) | undefined
   /** Why the last read failed, when it did. */
   readProblem?: string | null
   /** Sends this scene to the read now, whether or not it changed. */
@@ -129,7 +132,7 @@ export function SceneEditor({
             <button className="ed-histbtn" onClick={() => void toggleHistory()}>
               History
             </button>
-            {onRead && <ReadButton what="scene" canRead={canRead} reading={reading} readProblem={readProblem} onRead={onRead} onCancel={onCancelRead} />}
+            {onRead && <ReadButton what="scene" progress={progress} canRead={canRead} reading={reading} readProblem={readProblem} onRead={onRead} onCancel={onCancelRead} />}
             {scene.characters.length > 0 && <span className="ed-chips">👤 {scene.characters.join(', ')}</span>}
           </div>
           {history && (

@@ -19,7 +19,7 @@ import { continuityRequest, findingsFrom, type ContinuityFinding, type Continuit
 import { checkHealth, type Health } from './assistant/health'
 import { ledgerEntryFrom, readSceneRequest, type ReadSceneOutput } from './assistant/readScene'
 import { run } from './assistant/runner'
-import { RunnerFailure } from './assistant/claudeCode'
+import { RunnerFailure, type Progress } from './assistant/claudeCode'
 import { assistantSettings, DEFAULT_PROMPTS, loadPrompts, savePrompts, withAssistant, type AssistantSettings, type Prompts } from './assistant/settings'
 import type { MentionContext } from './mentions/context'
 import { describeTarget } from './mentions/describe'
@@ -242,7 +242,20 @@ export default function App({
   loadedRef.current = loaded
   const [reading, setReading] = useState<Set<TargetKey>>(new Set())
   const readAborts = useRef<Map<TargetKey, AbortController>>(new Map())
-  const [readProblem, setReadProblem] = useState<string | null>(null)
+  /** What each read in flight is doing, and when it began — so a page reopened mid-read picks up where the count was. */
+  const [readProgress, setReadProgress] = useState<Record<TargetKey, Progress & { startedAt: number }>>({})
+  /** Why the last read of a page failed, per page; a failure on one page is not news on another. */
+  const [readProblems, setReadProblems] = useState<Record<TargetKey, string>>({})
+  const setReadProblem = (item: TargetKey | null, message: string | null) =>
+    setReadProblems((all) => {
+      const next = { ...all }
+      if (item === null) return message === null ? {} : all
+      if (message === null) delete next[item]
+      else next[item] = message
+      return next
+    })
+  /** The problem the Coach view shows: the latest one, whatever page it was on. */
+  const readProblem = Object.values(readProblems).at(-1) ?? null
   // The coaching switch and the model live in story.json; the health
   // check behind the switch is what this machine says right now, run
   // when the switch goes on and at every open while it is on.
@@ -827,20 +840,31 @@ export default function App({
     readAborts.current.set(item, controller)
     opts.signal?.addEventListener('abort', () => controller.abort())
     setReading((set) => new Set(set).add(item))
+    const startedAt = Date.now()
+    setReadProgress((all) => ({ ...all, [item]: { phase: 'starting', chars: 0, startedAt } }))
+    setReadProblem(item, null)
     try {
-      const result = await run<ReadSceneOutput>(runner, request, { model: assistantSettings(story.manifest).model, signal: controller.signal })
+      const result = await run<ReadSceneOutput>(runner, request, {
+        model: assistantSettings(story.manifest).model,
+        signal: controller.signal,
+        onProgress: (progress) => setReadProgress((all) => ({ ...all, [item]: { ...progress, startedAt } })),
+      })
       const next = { ...ledgerRef.current, [item]: ledgerEntryFrom(result.output, text, dictNow) }
       setLedger(next)
       store.save(folder.name, next)
-      setReadProblem(null)
       setLimit(null)
       return true
     } catch (error) {
       if (error instanceof RunnerFailure && error.limit) setLimit(error.message)
-      else if (!(error instanceof RunnerFailure && error.message === 'Cancelled.')) setReadProblem((error as Error).message)
+      else if (!(error instanceof RunnerFailure && error.message === 'Cancelled.')) setReadProblem(item, (error as Error).message)
       return false
     } finally {
       if (readAborts.current.get(item) === controller) readAborts.current.delete(item)
+      setReadProgress((all) => {
+        const next = { ...all }
+        delete next[item]
+        return next
+      })
       setReading((set) => {
         const next = new Set(set)
         next.delete(item)
@@ -891,11 +915,11 @@ export default function App({
       const result = await run<ContinuityOutput>(runner, request, { model: assistantSettings(current.story.manifest).model, signal })
       const found = findingsFrom(result.output, current.story, id)
       setContinuity((list) => [...list.filter((f) => f.storyline !== id), ...found])
-      setReadProblem(null)
+      setReadProblem(`storyline:${id}`, null)
       setLimit(null)
     } catch (error) {
       if (error instanceof RunnerFailure && error.limit) setLimit(error.message)
-      else setReadProblem((error as Error).message)
+      else setReadProblem(`storyline:${id}`, (error as Error).message)
     }
   }
 
@@ -1162,7 +1186,7 @@ export default function App({
     setFolder(opened)
     setLoaded(result.loaded)
     setLedger(store.load(opened.name))
-    setReadProblem(null)
+    setReadProblem(null, null)
     setPrompts(await loadPrompts(opened.files))
     const { manifest, scenes } = result.loaded.story
     const coaching = assistantSettings(manifest)
@@ -1206,7 +1230,7 @@ export default function App({
     checkAbort.current?.abort()
     setLedger({})
     setContinuity([])
-    setReadProblem(null)
+    setReadProblem(null, null)
     setHealth({ kind: 'idle' })
     setLimit(null)
     setPrompts(DEFAULT_PROMPTS)
@@ -1664,7 +1688,8 @@ export default function App({
             onOpenTarget={(key) => void openTarget(key)}
             canRead={coachingOn}
             reading={noteItem !== null && reading.has(noteItem)}
-            readProblem={readProblem}
+            progress={noteItem !== null ? readProgress[noteItem] : undefined}
+            readProblem={noteItem !== null ? (readProblems[noteItem] ?? null) : null}
             read={readInfo(noteItem)}
             onRead={() => {
               if (noteItem) void readItem(noteItem, { force: true })
@@ -1719,7 +1744,8 @@ export default function App({
             }}
             canRead={coachingOn}
             reading={refItem !== null && reading.has(refItem)}
-            readProblem={readProblem}
+            progress={refItem !== null ? readProgress[refItem] : undefined}
+            readProblem={refItem !== null ? (readProblems[refItem] ?? null) : null}
             read={readInfo(refItem)}
             onRead={() => {
               if (refItem) void readItem(refItem, { force: true })
@@ -1780,7 +1806,8 @@ export default function App({
           onOpenTarget={(key) => void openTarget(key)}
           canRead={coachingOn}
           reading={sceneItem !== null && reading.has(sceneItem)}
-          readProblem={readProblem}
+          progress={sceneItem !== null ? readProgress[sceneItem] : undefined}
+          readProblem={sceneItem !== null ? (readProblems[sceneItem] ?? null) : null}
           read={readInfo(sceneItem)}
           onRead={() => {
             if (sceneItem) void readItem(sceneItem, { force: true })

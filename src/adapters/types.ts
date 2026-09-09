@@ -164,6 +164,8 @@ export interface SpawnOptions {
   signal?: AbortSignal
   /** The workflow's name — nothing to a real runner; the stub answers by it. */
   workflow?: string
+  /** Each line Claude Code prints, as it prints it: the stream the app reads progress off. */
+  onLine?: (line: string) => void
 }
 
 export interface ProcessResult {

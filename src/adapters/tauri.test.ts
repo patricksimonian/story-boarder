@@ -266,3 +266,20 @@ describe('tauriRunner', () => {
     expect(await runner.status()).toEqual({ kind: 'unavailable', reason: 'Claude Code not found on PATH — install it and sign in, then restart the app.' })
   })
 })
+
+describe('tauriRunner streaming', () => {
+  it('hands the shell’s lines for its own run to onLine, and none of another run’s', async () => {
+    invoke.mockImplementationOnce(async () => {
+      // The shell emits lines while the command runs; the runner listens by run id.
+      const own = (invoke.mock.calls[0][1] as { runId: string }).runId
+      listeners[listeners.length - 1]({ payload: { runId: 'someone-else', line: '{"type":"system"}' } })
+      listeners[listeners.length - 1]({ payload: { runId: own, line: '{"type":"result"}' } })
+      return { stdout: '{"type":"result"}\n', stderr: '', exitCode: 0 }
+    })
+    const lines: string[] = []
+    const result = await tauriRunner().spawnClaude(['-p'], 'briefing', { onLine: (line) => lines.push(line) })
+    expect(result.exitCode).toBe(0)
+    expect(lines).toEqual(['{"type":"result"}'])
+    expect(unlisten).toHaveBeenCalled()
+  })
+})

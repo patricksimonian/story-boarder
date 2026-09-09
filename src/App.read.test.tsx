@@ -275,10 +275,28 @@ describe('the scene read', () => {
     await userEvent.click(read)
     const progress = await within(editor).findByRole('status', { name: 'Reading' })
     expect(progress).toHaveTextContent(/\d+s/)
+    expect(progress).toHaveTextContent('starting')
     await userEvent.click(within(progress).getByRole('button', { name: 'Cancel' }))
     await waitFor(() => expect(within(editor).getByRole('button', { name: 'Read' })).toBeEnabled())
     expect(within(editor).queryByRole('alert')).not.toBeInTheDocument()
     expect(within(editor).queryByRole('region', { name: 'Last read' })).not.toBeInTheDocument()
+  })
+
+  test('a failure belongs to its page, not to every page', async () => {
+    const world = embersWorld()
+    await world.files.writeText('scenes/the-dry-cistern.md', CISTERN)
+    const runner = new StubProcessRunner()
+    runner.answer('read-scene', { stdout: '', stderr: 'error: something went wrong', exitCode: 1 })
+    await openStory(world, runner)
+    const editor = await openCistern()
+    const read = await within(editor).findByRole('button', { name: 'Read' })
+    await waitFor(() => expect(read).toBeEnabled())
+    await userEvent.click(read)
+    expect(await within(editor).findByRole('alert')).toHaveTextContent('error: something went wrong')
+    await userEvent.keyboard('{Escape}')
+    await userEvent.click(screen.getAllByRole('button', { name: 'Open scene Cold Open: Lowmarket' })[0])
+    const other = await screen.findByRole('dialog', { name: /scene editor/i })
+    expect(within(other).queryByRole('alert')).not.toBeInTheDocument()
   })
 
   test('a read that fails says why beside the button', async () => {

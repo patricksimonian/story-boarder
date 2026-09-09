@@ -4,6 +4,7 @@ import type { ReferenceEntity, ReferenceKind, Slug, Story, TargetKey } from '../
 import type { MentionContext } from '../mentions/context'
 import type { Target } from '../mentions/match'
 import { NamedIn } from './NamedIn'
+import type { Progress } from '../assistant/claudeCode'
 import { ReadButton } from './ReadButton'
 import { ReadOutcome, type ReadInfo } from './ReadOutcome'
 import { foldTag, tagIndex } from '../tags/canon'
@@ -40,6 +41,7 @@ export function LibraryView({
   onDismissAlias = () => { },
   canRead = false,
   reading = false,
+  progress,
   readProblem = null,
   onRead,
   onCancelRead,
@@ -65,6 +67,7 @@ export function LibraryView({
   onDismissAlias?: (alias: string) => void
   canRead?: boolean
   reading?: boolean
+  progress?: (Progress & { startedAt: number }) | undefined
   readProblem?: string | null
   /** Sends this page to the read now: what its text names, and what it says. */
   onRead?: () => void
@@ -190,7 +193,7 @@ export function LibraryView({
             />
             {onRead && (
               <div className="notes-readrow">
-                <ReadButton what="page" className="" canRead={canRead} reading={reading} readProblem={readProblem} onRead={onRead} onCancel={onCancelRead} />
+                <ReadButton what="page" progress={progress} className="" canRead={canRead} reading={reading} readProblem={readProblem} onRead={onRead} onCancel={onCancelRead} />
               </div>
             )}
             <ReadOutcome read={read} />

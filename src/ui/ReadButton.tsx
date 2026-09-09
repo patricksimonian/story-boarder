@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { phaseWord, type Progress } from '../assistant/claudeCode'
 
 /**
  * The Read button and what stands beside it while a read runs: how long
@@ -9,6 +10,7 @@ export function ReadButton({
   what,
   canRead,
   reading,
+  progress,
   readProblem,
   onRead,
   onCancel,
@@ -18,6 +20,8 @@ export function ReadButton({
   what: string
   canRead: boolean
   reading: boolean
+  /** What Claude Code is doing and since when; absent while nothing runs. */
+  progress?: (Progress & { startedAt: number }) | undefined
   readProblem: string | null
   onRead: () => void
   onCancel?: () => void
@@ -36,7 +40,9 @@ export function ReadButton({
       </button>
       {reading && (
         <span className="read-progress" role="status" aria-label="Reading">
-          <Elapsed />
+          {progress && <span className="read-phase">{phaseWord(progress)}</span>}
+          <Elapsed since={progress?.startedAt} />
+          {progress && progress.chars > 0 && <span className="read-chars">{progress.chars.toLocaleString()} chars</span>}
           {onCancel && (
             <button type="button" className="goto" onClick={onCancel}>
               Cancel
@@ -53,12 +59,16 @@ export function ReadButton({
   )
 }
 
-function Elapsed() {
-  const [seconds, setSeconds] = useState(0)
+/** Seconds since the read began — the app's start time, so leaving the page and coming back does not restart the count. */
+function Elapsed({ since }: { since?: number }) {
+  const [fallback] = useState(() => Date.now())
+  const started = since ?? fallback
+  const [seconds, setSeconds] = useState(() => Math.max(0, Math.floor((Date.now() - started) / 1000)))
   useEffect(() => {
-    const started = Date.now()
-    const timer = window.setInterval(() => setSeconds(Math.floor((Date.now() - started) / 1000)), 1000)
+    const tick = () => setSeconds(Math.max(0, Math.floor((Date.now() - started) / 1000)))
+    tick()
+    const timer = window.setInterval(tick, 1000)
     return () => clearInterval(timer)
-  }, [])
+  }, [started])
   return <span className="read-elapsed">{seconds}s</span>
 }

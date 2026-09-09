@@ -2875,3 +2875,9 @@ button.sb-pen:focus-visible {
 .read-elapsed {
   font-variant-numeric: tabular-nums;
 }
+.read-phase {
+  font-style: italic;
+}
+.read-chars {
+  font-variant-numeric: tabular-nums;
+}

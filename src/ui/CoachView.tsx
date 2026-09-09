@@ -13,18 +13,18 @@ import type { View } from '../state/view'
 export function CoachView({
   story,
   coachingOn = false,
-  onView = () => {},
+  onView = () => { },
   ledger = {},
   titleOf = () => undefined,
-  onOpenScene = () => {},
-  onReadAll = () => {},
-  onCancelReadAll = () => {},
+  onOpenScene = () => { },
+  onReadAll = () => { },
+  onCancelReadAll = () => { },
   readingAll = null,
   readProblem = null,
   continuityCount = 0,
-  onCheck = () => {},
-  onCheckAll = () => {},
-  onCancelCheck = () => {},
+  onCheck = () => { },
+  onCheckAll = () => { },
+  onCancelCheck = () => { },
   checking = null,
 }: {
   story: Story
@@ -67,10 +67,6 @@ export function CoachView({
       )}
       <div className="coach-section">
         <h3>Editor’s notes</h3>
-        <p className="view-note">
-          What the reads flagged, page by page: a scene against the world and the scenes before it, loose ends, state the engine should track,
-          people the scene or the library does not know. Each note is on its page with the fix it offers.
-        </p>
         {noted.length === 0 ? (
           <p className="hist-empty">No notes yet.</p>
         ) : (

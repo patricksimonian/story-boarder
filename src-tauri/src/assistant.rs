@@ -5,7 +5,7 @@
 
 use serde::Serialize;
 use std::collections::HashMap;
-use std::io::{Read, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
@@ -118,8 +118,17 @@ fn hide_window(command: &mut Command) {
 #[cfg(not(windows))]
 fn hide_window(_command: &mut Command) {}
 
-/// Runs claude with argv, writes stdin, waits, and returns what it printed. Blocks the calling thread.
-pub fn spawn(binary: &Path, argv: &[String], stdin_text: &str, cwd: &Path, runs: &Runs, run_id: &str) -> Result<ProcessResult, String> {
+/// Runs claude with argv, writes stdin, hands each stdout line to `on_line`
+/// as it is printed, waits, and returns what it printed. Blocks the calling thread.
+pub fn spawn(
+    binary: &Path,
+    argv: &[String],
+    stdin_text: &str,
+    cwd: &Path,
+    runs: &Runs,
+    run_id: &str,
+    on_line: impl Fn(&str) + Send + 'static,
+) -> Result<ProcessResult, String> {
     let mut command = command_for(binary);
     command.args(argv).current_dir(cwd).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
     // Claude Code thinks before it answers unless told not to; for a
@@ -138,7 +147,18 @@ pub fn spawn(binary: &Path, argv: &[String], stdin_text: &str, cwd: &Path, runs:
     let writer = std::thread::spawn(move || {
         let _ = stdin.write_all(text.as_bytes());
     });
-    let out = std::thread::spawn(move || read_all(stdout));
+    let out = std::thread::spawn(move || {
+        let mut all = String::new();
+        for line in BufReader::new(stdout).lines() {
+            let Ok(line) = line else { break };
+            if !line.trim().is_empty() {
+                on_line(&line);
+            }
+            all.push_str(&line);
+            all.push('\n');
+        }
+        all
+    });
     let err = std::thread::spawn(move || read_all(stderr));
 
     let handle = Arc::new(Mutex::new(child));
@@ -243,8 +263,14 @@ mod tests {
         let script = dir.join("claude.cmd");
         std::fs::write(&script, "@echo off\r\nset /p line=\r\necho out %1 %2 %line%\r\necho err 1>&2\r\nexit /b 3\r\n").unwrap();
         let runs = Runs::default();
-        let result = spawn(&script, &["-p".into(), "x".into()], "briefing\r\n", &dir, &runs, "run-1").unwrap();
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let sink = seen.clone();
+        let result = spawn(&script, &["-p".into(), "x".into()], "briefing\r\n", &dir, &runs, "run-1", move |line| {
+            sink.lock().unwrap().push(line.to_string())
+        })
+        .unwrap();
         assert_eq!(result.stdout.trim(), "out -p x briefing");
+        assert_eq!(seen.lock().unwrap().as_slice(), ["out -p x briefing"]);
         assert_eq!(result.stderr.trim(), "err");
         assert_eq!(result.exit_code, 3);
         assert!(runs.0.lock().unwrap().is_empty());
