@@ -47,6 +47,9 @@ export function ReadButton({
         <span className="read-progress" role="status" aria-label="Reading">
           {progress && <span className="read-phase">{phaseWord(progress)}</span>}
           <Elapsed since={progress?.startedAt} />
+          {progress?.phase === 'starting' && Date.now() - progress.startedAt > 20_000 && (
+            <span className="read-hint">no word from Claude Code yet — is the helper current? Settings checks it</span>
+          )}
           {progress && progress.chars > 0 && <span className="read-chars">{progress.chars.toLocaleString()} chars</span>}
           {onCancel && (
             <button type="button" className="goto" onClick={onCancel}>

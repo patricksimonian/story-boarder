@@ -46,6 +46,13 @@ describe('the browser runner over the helper', () => {
     expect(phases).toEqual(['connected', 'writing', 'done'])
   })
 
+  test('the status names the helper it needs, and an older helper by what to do', async () => {
+    const base = await start(async () => ({ stdout: '', stderr: '', exitCode: 0 }))
+    expect(await helperRunner(base).status()).toEqual({ kind: 'ready', detail: 'Claude Code 2.1.215' })
+    const older = helperRunner(base, async () => new Response(JSON.stringify({ version: '2.1.215' }), { status: 200 }))
+    expect(await older.status()).toEqual({ kind: 'unavailable', reason: 'The assistant helper is from an older build — stop it and run pnpm assistant again.' })
+  })
+
   test('a helper that fails says why', async () => {
     const base = await start(async () => {
       throw new Error('Claude Code not found on PATH')

@@ -15,6 +15,8 @@ import { delimiter, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 export const PORT = 7311
+/** Bumped whenever the page and the helper must change together; the page refuses an older helper by name. */
+export const PROTOCOL = 2
 export const DEFAULT_ORIGINS = ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:4173', 'http://127.0.0.1:4173']
 
 /** Finds `claude` the way the shell does, then prefers its JS entry so no shell sits between us and its argv. */
@@ -123,9 +125,9 @@ export function createAssistant({ spawn: spawnFn = spawnClaude, version = claude
     }
     if (req.method === 'GET' && req.url === '/status') {
       try {
-        answer(200, { version: await version() })
+        answer(200, { version: await version(), protocol: PROTOCOL })
       } catch (error) {
-        answer(200, { error: error.message })
+        answer(200, { error: error.message, protocol: PROTOCOL })
       }
       return
     }

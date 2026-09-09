@@ -23,6 +23,9 @@ describe('the health check', () => {
     const noHelper = new StubProcessRunner({ kind: 'unavailable', reason: 'The assistant helper is not running — run pnpm assistant' })
     expect(await checkHealth(noHelper, 'haiku', 'E')).toEqual({ kind: 'error', reason: 'assistant helper not running — run pnpm assistant' })
 
+    const old = new StubProcessRunner({ kind: 'unavailable', reason: 'The assistant helper is from an older build — stop it and run pnpm assistant again.' })
+    expect(await checkHealth(old, 'haiku', 'E')).toEqual({ kind: 'error', reason: 'assistant helper out of date — stop it and run pnpm assistant again' })
+
     const signedOut = new StubProcessRunner()
     signedOut.authValue = { kind: 'signed-out' }
     expect(await checkHealth(signedOut, 'haiku', 'E')).toEqual({ kind: 'error', reason: 'claude not logged in' })

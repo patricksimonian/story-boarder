@@ -2886,3 +2886,6 @@ button.sb-pen:focus-visible {
   color: var(--muted);
   margin-left: 6px;
 }
+.read-hint {
+  color: #a0522d;
+}

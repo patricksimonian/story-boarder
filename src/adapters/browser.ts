@@ -384,6 +384,9 @@ async function readLines(response: Response, onLine: (line: string) => void): Pr
   return outcome
 }
 const HELPER_DOWN = 'The assistant helper is not running — in a terminal at the project, run pnpm assistant and leave it running.'
+const HELPER_OLD = 'The assistant helper is from an older build — stop it and run pnpm assistant again.'
+/** What this page expects the helper to speak; scripts/assistant.mjs carries the same number. */
+const HELPER_PROTOCOL = 2
 
 /**
  * A page cannot spawn anything, so the browser build asks the helper in
@@ -425,7 +428,8 @@ export function helperRunner(base: string = HELPER_URL, fetchFn: typeof fetch = 
 
     async status() {
       try {
-        const body = (await (await fetchFn(`${base}/status`)).json()) as { version?: string; error?: string }
+        const body = (await (await fetchFn(`${base}/status`)).json()) as { version?: string; error?: string; protocol?: number }
+        if (body.protocol !== HELPER_PROTOCOL) return { kind: 'unavailable', reason: HELPER_OLD }
         if (body.version) return { kind: 'ready', detail: `Claude Code ${body.version}` }
         return { kind: 'unavailable', reason: body.error ?? 'The assistant helper found no Claude Code.' }
       } catch {

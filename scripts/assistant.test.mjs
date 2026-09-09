@@ -45,12 +45,12 @@ describe('the assistant helper', () => {
 
   test('reports the version, or why there is none', async () => {
     const base = await start(async () => ({ stdout: '', stderr: '', exitCode: 0 }))
-    expect(await (await fetch(`${base}/status`)).json()).toEqual({ version: '2.1.215' })
+    expect(await (await fetch(`${base}/status`)).json()).toEqual({ version: '2.1.215', protocol: 2 })
     server.close()
     const down = await start(async () => ({ stdout: '', stderr: '', exitCode: 0 }), async () => {
       throw new Error('Claude Code not found on PATH')
     })
-    expect(await (await fetch(`${down}/status`)).json()).toEqual({ error: 'Claude Code not found on PATH' })
+    expect(await (await fetch(`${down}/status`)).json()).toEqual({ error: 'Claude Code not found on PATH', protocol: 2 })
   })
 
   test('reports the auth status as printed, or why it could not ask', async () => {

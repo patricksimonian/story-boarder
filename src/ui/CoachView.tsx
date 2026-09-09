@@ -75,6 +75,7 @@ export function CoachView({
               <div key={targetKey(item)} className="coach-entity">
                 <h4>
                   {item.title}{' '}
+
                   {item.kind === 'scene' && (
                     <button type="button" className="goto" aria-label={`Open scene ${item.title}`} onClick={() => onOpenScene(item.id)}>
                       ↗

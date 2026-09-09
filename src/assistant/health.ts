@@ -17,6 +17,7 @@ export async function checkHealth(runner: ProcessRunner | undefined, model: stri
 
   const status = await runner.status()
   if (status.kind !== 'ready') {
+    if (/older build/i.test(status.reason)) return { kind: 'error', reason: 'assistant helper out of date — stop it and run pnpm assistant again' }
     return { kind: 'error', reason: /helper/i.test(status.reason) ? 'assistant helper not running — run pnpm assistant' : 'claude code not installed' }
   }
 
