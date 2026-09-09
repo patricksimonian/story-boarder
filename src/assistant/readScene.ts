@@ -8,62 +8,135 @@ import type { JsonSchema, WorkflowRequest } from './claudeCode'
 
 /**
  * The read: one call per item that does what an editor with the whole
- * story in their head would do for this page. Underneath, the
- * bookkeeping the matcher cannot — phrases resolved, names refused,
- * what the item asserts about each named thing. On top, the editor's
- * notes: the scene against the world the library and notebook lay down
- * and against the scenes before it, the threads it leaves loose, the
- * state it implies that the engine does not track, the people and
- * places in the prose that the scene or the library does not know.
+ * story in their head would do for this page. Its answer has a field
+ * for each job, named plainly so a small model reaches for each one:
+ * synonyms (a phrase that names something the story has, under other
+ * words), untracked entities (what the page treats as part of the story
+ * that nothing describes yet), untracked variables (state the page
+ * changes or assumes that the registry does not track), developments
+ * (what the page says about each named thing), and the editor's notes
+ * (continuity, loose ends). Underneath, the ledger keeps the same shape
+ * it always did.
  */
 
 export const READ_SCENE = 'read-scene'
 
 export const NOTE_KINDS = ['continuity', 'loose-end', 'define', 'other'] as const
-export const DEFINE_KINDS = ['character', 'place', 'lore', 'scene', 'note', 'variable'] as const
 export type NoteKind = (typeof NOTE_KINDS)[number]
+export const DEFINE_KINDS = ['character', 'place', 'lore', 'scene', 'note', 'variable'] as const
+/** The kinds an untracked entity can be: a page, a scene, or a note. A variable is its own job. */
+const PAGE_KINDS = ['character', 'place', 'lore', 'scene', 'note']
 
 export interface ReadSceneOutput {
-  mentions: { quote: string; entity: string }[]
-  rejected: { quote: string; candidate: string; why: string }[]
+  /** A phrase on this page that names something the story has, under other words. */
+  synonyms: { phrase: string; entity: string }[]
+  /** What this page treats as part of the story that no page, scene, or note describes. */
+  untracked_entities: {
+    name: string
+    kind: string
+    message: string
+    quote: string
+    suggestion?: string
+    /** An older prompt may still file a variable here; the ledger takes it either way. */
+    variable?: { id: string; type: string; initial: string; description: string }
+    effect?: string
+  }[]
+  /** State this page changes or assumes that a later scene would test, and no variable tracks. */
+  untracked_variables?: {
+    name: string
+    message: string
+    quote: string
+    variable: { id: string; type: string; initial: string; description: string }
+    effect?: string
+    condition?: string
+    suggestion?: string
+  }[]
+  /** Library characters in a scene's prose that its characters field does not list, by key. */
+  unlisted_characters?: string[]
   developments: { entity: string; fact: string; quote: string }[]
+  rejected: { quote: string; candidate: string; why: string }[]
   notes: {
     kind: string
     message: string
     quote: string
     suggestion?: string
     against?: { where: string; quote: string }
-    entity?: string
-    name?: string
-    defineAs?: string
-    variable?: { id: string; type: string; initial: string; description: string }
-    effect?: string
   }[]
+}
+
+const VARIABLE_SHAPE = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', description: 'snake_case' },
+    type: { type: 'string', enum: ['boolean', 'number', 'enum'] },
+    initial: { type: 'string' },
+    description: { type: 'string', description: "one line, in the writer's words" },
+  },
+  required: ['id', 'type', 'initial', 'description'],
+  additionalProperties: false,
 }
 
 export const READ_SCENE_SCHEMA: JsonSchema = {
   type: 'object',
   properties: {
-    mentions: {
+    synonyms: {
       type: 'array',
+      description:
+        'Phrases on this page that name something the story already has, under other words: a role, a relation, an epithet, a nickname, a title the library gives another way. "the salt queen" names character:queen-ilsabet when her page calls her the salt queen.',
       items: {
         type: 'object',
-        properties: { quote: { type: 'string' }, entity: { type: 'string' } },
-        required: ['quote', 'entity'],
+        properties: {
+          phrase: { type: 'string', description: 'the phrase as it appears on this page, a few words at most' },
+          entity: { type: 'string', description: 'the key of the thing it names, kind:id, from the list of what the story has' },
+        },
+        required: ['phrase', 'entity'],
         additionalProperties: false,
       },
     },
-    rejected: {
+    untracked_entities: {
       type: 'array',
+      description:
+        'What this page treats as part of the story that no page, scene, or note describes yet: a person, place, region, faction, relic, rite, piece of history (character, place, lore); an event that should be a scene; world-building that should be a note.',
       items: {
         type: 'object',
-        properties: { quote: { type: 'string' }, candidate: { type: 'string' }, why: { type: 'string' } },
-        required: ['quote', 'candidate', 'why'],
+        properties: {
+          name: { type: 'string', description: 'as written on this page' },
+          kind: { type: 'string', enum: PAGE_KINDS },
+          message: { type: 'string', description: 'one sentence: "X is mentioned, but no [kind] describes it"' },
+          quote: { type: 'string', description: 'the sentence on this page it rests on, verbatim' },
+          suggestion: { type: 'string', description: 'what the writer could do, one sentence starting with a verb' },
+        },
+        required: ['name', 'kind', 'message', 'quote'],
         additionalProperties: false,
       },
+    },
+    untracked_variables: {
+      type: 'array',
+      description:
+        'State this page changes or assumes that a later scene would test, and no variable in the registry tracks: who has a thing, where someone is, what someone knows, whether a way is open or closed. Each with the variable proposed.',
+      items: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: "the state, in the writer's words: \"whether the girl has the tide bell\"" },
+          message: { type: 'string', description: 'one sentence: what this page changes or assumes, and that no variable tracks it' },
+          quote: { type: 'string', description: 'the sentence on this page it rests on, verbatim' },
+          variable: VARIABLE_SHAPE,
+          effect: { type: 'string', description: 'an effect this page performs, as the engine reads it, e.g. "girl_has_bell = true"' },
+          condition: { type: 'string', description: 'a condition this page plainly assumes, as the engine reads it, e.g. "crossing_open == false"' },
+          suggestion: { type: 'string', description: 'what the writer could do, one sentence starting with a verb' },
+        },
+        required: ['name', 'message', 'quote', 'variable'],
+        additionalProperties: false,
+      },
+    },
+    unlisted_characters: {
+      type: 'array',
+      description: "On a scene only: keys of library characters who are in the scene's prose but not in its characters field.",
+      items: { type: 'string' },
     },
     developments: {
       type: 'array',
+      description: 'Facts this page asserts or changes about a named thing in the story world, one plain present-tense sentence each, with the writer\'s sentence quoted verbatim.',
       items: {
         type: 'object',
         properties: { entity: { type: 'string' }, fact: { type: 'string' }, quote: { type: 'string' } },
@@ -71,57 +144,60 @@ export const READ_SCENE_SCHEMA: JsonSchema = {
         additionalProperties: false,
       },
     },
+    rejected: {
+      type: 'array',
+      description: 'A name the briefing lists as already matched that does not mean that thing here.',
+      items: {
+        type: 'object',
+        properties: { quote: { type: 'string' }, candidate: { type: 'string' }, why: { type: 'string' } },
+        required: ['quote', 'candidate', 'why'],
+        additionalProperties: false,
+      },
+    },
     notes: {
       type: 'array',
+      description: "The editor's notes: continuity (with both ends), loose ends, anything else worth flagging.",
       items: {
         type: 'object',
         properties: {
-          kind: { type: 'string', enum: [...NOTE_KINDS] },
-          message: { type: 'string' },
-          quote: { type: 'string' },
-          suggestion: { type: 'string' },
+          kind: { type: 'string', enum: ['continuity', 'loose-end', 'other'] },
+          message: { type: 'string', description: 'one full sentence stating what is the case on this page' },
+          quote: { type: 'string', description: 'the sentence on this page it rests on, verbatim' },
+          suggestion: { type: 'string', description: 'what the writer could do, one sentence starting with a verb' },
           against: {
             type: 'object',
+            description: 'for continuity: the other end — the page or scene this clashes with, by key, and its sentence',
             properties: { where: { type: 'string' }, quote: { type: 'string' } },
             required: ['where', 'quote'],
             additionalProperties: false,
           },
-          entity: { type: 'string' },
-          name: { type: 'string' },
-          defineAs: { type: 'string', enum: [...DEFINE_KINDS] },
-          variable: {
-            type: 'object',
-            properties: {
-              id: { type: 'string' },
-              type: { type: 'string', enum: ['boolean', 'number', 'enum'] },
-              initial: { type: 'string' },
-              description: { type: 'string' },
-            },
-            required: ['id', 'type', 'initial', 'description'],
-            additionalProperties: false,
-          },
-          effect: { type: 'string' },
         },
         required: ['kind', 'message', 'quote'],
         additionalProperties: false,
       },
     },
   },
-  required: ['mentions', 'rejected', 'developments', 'notes'],
+  required: ['synonyms', 'untracked_entities', 'untracked_variables', 'developments', 'rejected', 'notes'],
   additionalProperties: false,
 }
 
-export const READ_SCENE_RUBRIC = `You are the editor who has read the whole story and is now reading one page of it for a writing tool. You never write prose, never rewrite, never invent. You report, and every report quotes the page.
+export const READ_SCENE_RUBRIC = `You are the editor who has read the whole story and is now reading one page of it for a writing tool. You never write prose, never rewrite, never invent. You report, and every report quotes the page. The answer has a field for each job; do every job, in this order.
 
-First, the bookkeeping. Mentions: phrases on this page that refer to something the story has — a library page, a note, a scene, a variable — but were not already matched by name — a role ("the smith"), a relation ("her sister"), an epithet, a nickname, a title the library gives another way ("the salt queen" for Queen Ilsabet). A phrase that means something the story has, under another name, is always a mention with that thing's key, never a note about a name to track; the writer confirms it on the page, so a likely reading is enough.  Resolve only what the text supports; a pronoun with two possible referents is left alone; never list a pronoun on its own; never repeat a phrase the briefing says is already matched. Rejected: a candidate the briefing lists that does not refer to that thing here — a common word that happens to be a title, a name used about the writing rather than in the story, a misspelling that is a different word. Developments: facts this page asserts or changes about a named thing in the story world — where someone is, what they know, what they have, what has happened to them, what a place now is — one plain present-tense sentence each with the writer's sentence quoted verbatim. Few and sure.
+synonyms: every phrase on this page that names something the story already has, under other words than its title — a role ("the smith"), a relation ("her sister"), an epithet, a nickname, a title the library gives another way. The list of what the story has gives each library page with the first line of its page: when a phrase on this page matches how a page describes its own subject, that phrase names that page ("the salt queen" names character:queen-ilsabet when her page opens "The salt queen of Marrow Point"). Go through the list; for each thing, ask whether this page refers to it by other words, and if it does, list the phrase with that thing's key. A likely reading is enough; the writer confirms it on the page. Never list a pronoun on its own, never a whole sentence, never a phrase the briefing says is already matched.
 
-Then the notes, which are the point. Every note has the same shape, and a note that does not fit it is dropped unread. message is one full sentence stating what is the case on this page — never a title, a topic, or a phrase like "the Keepers' burden": say what happens, who it concerns, and what is wrong or open. quote is the sentence on this page it rests on, verbatim. suggestion is one sentence saying what the writer could do about it, starting with a verb: "Decide whether…", "Add a line where…", "Check the Keepers page against…", "Create a page for…". The kinds:
-- continuity: this page against the world the library pages and notes lay down, or against what the scenes before it developed. A continuity note names both ends: message says what this page says and what the other page says, and against carries the other end — where is that page's key as the briefing gives it (kind:id) and quote is its sentence, verbatim. A continuity note without against is not a continuity note and is dropped. A change over time is not a contradiction; a flat clash is. A page in the library is a reference a scene may reveal to be belief rather than fact; say so only when the clash has no such reading.
-- loose-end: a thing this page sets up, promises, or raises that nothing before it accounts for and that the writer may want to pay off — a named object, a threat, a question a character asks and nobody answers. message says what is set up and what is left open; suggestion says where or how it could be paid off. Not every unanswered line is a loose end; only what a reader would carry forward.
-- define: anything this page treats as part of the story that no page, scene, note, or variable describes, and this is the note that matters most. Check what the story has and the world section first: a thing that has a page is never a define note, whatever the page is called. The message states what is the case, in this shape: "The Keepers are mentioned, but no lore page or note describes them." Never write that a thing wants, needs, deserves, or should have a page; a story has no wishes. Say what is missing, and the fix is the kind you give in defineAs. A person, a place, a region, a faction, a relic, a rite, a piece of history or world-building that a reader would expect to look up and the library has no page for: name it as written in name, and say in defineAs whether it should be a character, a place, or lore. An event this page tells or assumes that ought to be a scene of its own: defineAs scene, and name the scene. A body of world-building or backstory that deserves a note of its own: defineAs note, and name it. State this page implies that the story will want to test later and no variable tracks, an effect it plainly performs that the engine does not apply, a condition it plainly assumes: defineAs variable, and propose it (id in snake_case, type, initial, a one-line description in the writer's words) or give the effect as an expression the engine reads, e.g. "trust += 1", "mara_alive = false". Also a define note, on a scene only: a library character who is in the scene's prose but not in its characters field (give their key as the entity, defineAs character). Never on a note or a library page, which have no characters field. When the briefing shows the scenes and notes that name this page, read them for this page's subject too: a leader, a rite, a place, a faction those scenes treat as part of what this page is about and the story has no page for is a define note here, quoting the scene that names it. When the briefing lists things other reads already said the story lacks, connect them: if one of them belongs to this page's subject, say so in a define note rather than flagging it fresh. Judge by what the story would need, never by capital letters: "the swamp" and "port town" are places if the story keeps returning to them.
-- other: anything an editor would flag that fits none of the above.
+untracked_entities: anything this page treats as part of the story that no page, scene, or note describes yet. Check the list of what the story has first: a thing that has a page is never untracked, whatever the page is called. A person, a place, a region, a faction, a relic, a rite, a piece of history or world-building that a reader would expect to look up: name it as written, with kind character, place, or lore. An event this page tells or assumes that ought to be a scene of its own: kind scene. A body of world-building or backstory that deserves a note of its own: kind note. Judge by what the story would need, never by capital letters: "the swamp" and "port town" are places if the story keeps returning to them. The message states what is the case: "The Rite of Brine is mentioned, but no lore page describes it." Never write that a thing wants, needs, deserves, or should have a page; a story has no wishes. When the briefing shows the scenes and notes that name this page, read them for this page's subject too. When it lists things other reads already said the story lacks, connect them rather than flagging them fresh.
 
-Restraint is the rule: a handful of notes at most, each one you would stand behind, none you cannot quote. A page that is fine gets no notes. Name every thing by its key from the list of what the story has, exactly as given (kind:id). Answer with the JSON the schema asks for and nothing else.`
+untracked_variables: state this page changes or assumes that a later scene would test, and no variable in the registry tracks. Who has a thing now, where someone is, what someone knows, whether a way is open or closed, whether someone lives, whether a thing has happened. An object the page hands over is an entity; that someone now holds it is state, and state is this job. Go through the registry in the briefing and ask what this page changes or relies on that is not on it; the plainest case is a scene whose engine has no effects while its prose changes something a later scene would test. For each, propose the variable (id in snake_case, type boolean, number, or enum, its initial value, a one-line description in the writer's words) and the effect this page performs as an expression the engine reads ("girl_has_bell = true"), or the condition it assumes. The message states what is the case: "This scene gives the girl the tide bell, and no variable tracks who holds it." Never propose a variable the registry already has, and never one for a thing this page merely names.
+
+unlisted_characters: on a scene only, the keys of library characters who are in the scene's prose but not in its characters field. Never on a note or a library page.
+
+developments: facts this page asserts or changes about a named thing in the story world — where someone is, what they know, what they have, what has happened to them, what a place now is — one plain present-tense sentence each, with the writer's sentence quoted verbatim. Few and sure.
+
+rejected: a name the briefing lists as already matched that does not mean that thing here — a common word that happens to be a title, a name used about the writing rather than in the story, a misspelling that is a different word.
+
+notes: the editor's notes. Every note is one full sentence stating what is the case on this page — never a title, a topic, or a phrase like "the Keepers' burden" — with the sentence on this page it rests on quoted verbatim, and a suggestion saying what the writer could do about it, starting with a verb: "Decide whether…", "Add a line where…", "Check the Keepers page against…". A continuity note sets this page against the world the library pages and notes lay down, or against what the scenes before it developed; it names both ends, and against carries the other end — the key of that page or scene as the briefing gives it, and its sentence, verbatim. A continuity note without against is dropped. A change over time is not a contradiction; a flat clash is. A page in the library is a reference a scene may reveal to be belief rather than fact; say so only when the clash has no such reading. A loose-end note is a thing this page sets up, promises, or raises that nothing before it accounts for and that a reader would carry forward; say what is set up and what is left open, and where or how it could be paid off. Other: anything an editor would flag that fits neither.
+
+Restraint is the rule for the notes: a handful at most, each one you would stand behind, none you cannot quote. A page that is fine gets no notes. Name every thing by its key from the list of what the story has, exactly as given (kind:id). Answer with the JSON the schema asks for and nothing else.`
 
 const PAGE_BUDGET = 1400
 const NOTE_LIMIT = 6
@@ -304,8 +380,10 @@ export function readSceneRequest(story: Story, item: TargetKey, dict: Dictionary
 
 /**
  * The read as the ledger keeps it: keys the story does not have are
- * dropped, empty strings are dropped, a note of no known kind is
- * dropped, and the entry carries the hash of the text it was read from.
+ * dropped, empty strings are dropped, and the entry carries the hash of
+ * the text it was read from. Synonyms become mentions; untracked
+ * entities and unlisted characters become define notes; the notes keep
+ * their kinds. The ledger's shape does not change with the answer's.
  */
 export function ledgerEntryFrom(output: ReadSceneOutput, text: string, dict: Dictionary, now: number = Date.now(), item?: TargetKey): LedgerEntry {
   const isScene = item === undefined || item.startsWith('scene:')
@@ -313,10 +391,68 @@ export function ledgerEntryFrom(output: ReadSceneOutput, text: string, dict: Dic
   const known = (key: string) => dict.targets.has(key)
   const clean = (s: unknown) => (typeof s === 'string' ? s.trim() : '')
   const notes: EditorNote[] = []
+
+  const proposal = (raw: { id: string; type: string; initial: string; description: string } | undefined): EditorNote['variable'] | undefined => {
+    if (!raw || !clean(raw.id) || !['boolean', 'number', 'enum'].includes(clean(raw.type))) return undefined
+    const id = clean(raw.id).toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '')
+    if (!id) return undefined
+    return { id, type: clean(raw.type) as 'boolean' | 'number' | 'enum', initial: clean(raw.initial), description: clean(raw.description) }
+  }
+
+  for (const raw of output.untracked_entities ?? []) {
+    const name = clean(raw.name)
+    const kind = clean(raw.kind)
+    if (!name || !(DEFINE_KINDS as readonly string[]).includes(kind)) continue
+    const defineAs = kind as EditorNote['defineAs']
+    if (defineAs !== 'variable') {
+      // A "missing" claim about a name the story already has is the read's
+      // error, not a gap: the Keepers page is called The Keepers.
+      const claimed = findMentions(name, dict).some((span) => span.certainty === 'certain' && span.targets.length > 0)
+      if (claimed) continue
+    } else if (dict.targets.has(`variable:${name}`)) continue
+    const note: EditorNote = { kind: 'define', message: clean(raw.message) || `${name} is mentioned, but nothing in the story describes it.`, quote: clean(raw.quote), name, defineAs }
+    if (clean(raw.suggestion)) note.suggestion = clean(raw.suggestion)
+    const variable = proposal(raw.variable)
+    if (variable) note.variable = variable
+    if (clean(raw.effect)) note.effect = clean(raw.effect)
+    notes.push(note)
+  }
+
+  // A variable proposal with no usable proposal, or for state the registry
+  // already tracks, is nothing the writer can act on.
+  for (const raw of output.untracked_variables ?? []) {
+    const name = clean(raw.name)
+    const variable = proposal(raw.variable)
+    if (!name || !variable) continue
+    if (dict.targets.has(`variable:${variable.id}`) || dict.targets.has(`variable:${name}`)) continue
+    const note: EditorNote = {
+      kind: 'define',
+      message: clean(raw.message) || `${name} is state this page changes, and no variable tracks it.`,
+      quote: clean(raw.quote),
+      name,
+      defineAs: 'variable',
+      variable,
+    }
+    if (clean(raw.suggestion)) note.suggestion = clean(raw.suggestion)
+    // The note carries the effect; a condition the page assumes is said in the message.
+    if (clean(raw.effect)) note.effect = clean(raw.effect)
+    notes.push(note)
+  }
+
+  // "In the prose but not listed on the scene" means nothing on a note or a library page.
+  if (isScene) {
+    for (const raw of output.unlisted_characters ?? []) {
+      const key = clean(raw)
+      const target = dict.targets.get(key)
+      if (!target || target.kind !== 'character') continue
+      notes.push({ kind: 'define', message: `${target.title} is in the prose but not listed on the scene.`, quote: '', entity: key, defineAs: 'character' })
+    }
+  }
+
   for (const raw of output.notes ?? []) {
     const kind = clean(raw.kind) as NoteKind
     const message = clean(raw.message)
-    if (!NOTE_KINDS.includes(kind) || !message) continue
+    if (!['continuity', 'loose-end', 'other'].includes(kind) || !message) continue
     // A note is a full sentence about this page, not a topic; a continuity note names its other end.
     if (message.split(/\s+/).length < 5) continue
     const note: EditorNote = { kind, message, quote: clean(raw.quote) }
@@ -325,37 +461,16 @@ export function ledgerEntryFrom(output: ReadSceneOutput, text: string, dict: Dic
       note.against = { where: clean(raw.against.where), quote: clean(raw.against.quote) }
     }
     if (kind === 'continuity' && !note.against) continue
-    if (raw.entity && known(clean(raw.entity))) note.entity = clean(raw.entity)
-    // "On this page but not listed on the scene" means nothing on a note or a library page.
-    if (kind === 'define' && note.entity && !isScene) continue
-    if (clean(raw.name)) note.name = clean(raw.name)
-    if ((DEFINE_KINDS as readonly string[]).includes(clean(raw.defineAs))) note.defineAs = clean(raw.defineAs) as EditorNote['defineAs']
-    if (note.kind === 'define' && !note.entity && !note.name) continue
-    if (note.kind === 'define' && !note.entity && note.name && note.defineAs !== 'variable') {
-      // A "missing" claim about a name the story already has is the read's
-      // error, not a gap: the Keepers page is called The Keepers.
-      const claimed = findMentions(note.name, dict).some((span) => span.certainty === 'certain' && span.targets.length > 0)
-      if (claimed) continue
-    }
-    if (note.kind === 'define' && note.defineAs === 'variable' && note.name && dict.targets.has(`variable:${note.name}`)) continue
-    if (raw.variable && clean(raw.variable.id) && ['boolean', 'number', 'enum'].includes(clean(raw.variable.type))) {
-      note.variable = {
-        id: clean(raw.variable.id).toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, ''),
-        type: clean(raw.variable.type) as 'boolean' | 'number' | 'enum',
-        initial: clean(raw.variable.initial),
-        description: clean(raw.variable.description),
-      }
-    }
-    if (clean(raw.effect)) note.effect = clean(raw.effect)
     notes.push(note)
   }
+
   return {
     hash: hashText(text),
     readAt: now,
-    // A resolved phrase is a phrase on this page, not a sentence and not a
-    // line from some other page the model had in front of it.
-    mentions: (output.mentions ?? [])
-      .map((m) => ({ quote: clean(m.quote), entity: clean(m.entity) }))
+    // A synonym is a phrase on this page, not a sentence and not a line
+    // from some other page the model had in front of it.
+    mentions: (output.synonyms ?? [])
+      .map((m) => ({ quote: clean(m.phrase), entity: clean(m.entity) }))
       .filter((m) => m.quote && known(m.entity) && m.quote.split(/\s+/).length <= 6 && text.toLowerCase().includes(m.quote.toLowerCase())),
     // A rejection only means something for a name the matcher actually
     // drew for that thing; the rest is the model ruling out air.

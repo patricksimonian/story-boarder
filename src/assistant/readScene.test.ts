@@ -100,42 +100,57 @@ describe('the read-scene briefing', () => {
 })
 
 describe('what the read leaves in the ledger', () => {
-  test('keys the story lacks are dropped, blanks are dropped, the hash is of the text read', async () => {
+  test('synonyms become mentions, untracked entities and variables become define notes, and what the story has is never called missing', async () => {
     const s = await story()
     const dict = dictionary(s)
     const entry = ledgerEntryFrom(
       {
-        mentions: [
-          { quote: 'The door-woman', entity: 'character:mara' },
-          { quote: 'the ghost', entity: 'character:ghost' },
-          { quote: '', entity: 'character:mara' },
-          { quote: 'a line from her page, not this one', entity: 'character:mara' },
-          { quote: 'the text and then far too many words to be a phrase at all', entity: 'character:mara' },
+        synonyms: [
+          { phrase: 'The door-woman', entity: 'character:mara' },
+          { phrase: 'the ghost', entity: 'character:ghost' },
+          { phrase: '', entity: 'character:mara' },
+          { phrase: 'a line from her page, not this one', entity: 'character:mara' },
+          { phrase: 'the text and then far too many words to be a phrase at all', entity: 'character:mara' },
+        ],
+        untracked_entities: [
+          { name: 'the Atacam', kind: 'place', message: 'The Atacam is mentioned, but no place page describes it.', quote: 'the Atacam' },
+          { name: 'the Keeper', kind: 'lore', message: 'The Keepers are mentioned, but no lore page describes them.', quote: 'q' },
+          { name: 'Rook', kind: 'character', message: 'Rook is mentioned, but no page describes him.', quote: 'q' },
+          { name: 'a thing of no kind', kind: 'widget', message: 'm', quote: 'q' },
+          { name: '', kind: 'place', message: 'm', quote: 'q' },
+        ],
+        untracked_variables: [
+          { name: 'trust', message: 'trust is untracked.', quote: 'q', variable: { id: 'trust', type: 'number', initial: '0', description: 'x' } },
+          { name: 'how far Mara trusts Rook', message: 'Trust is state the story tests.', quote: 'q', variable: { id: 'TRUST', type: 'number', initial: '0', description: 'x' } },
+          {
+            name: 'Trust Level',
+            message: 'Trust between them is state the story will want to test.',
+            quote: 'q',
+            variable: { id: 'Trust Level', type: 'number', initial: '0', description: 'How far.' },
+            effect: 'trust_level += 1',
+            condition: 'trust_level >= 1',
+          },
+          { name: 'whether the door is open', message: 'No proposal came with this one.', quote: 'q', variable: { id: '', type: 'boolean', initial: 'false', description: '' } },
+          { name: 'a kind the engine has no type for', message: 'm', quote: 'q', variable: { id: 'door_open', type: 'string', initial: '', description: '' } },
+        ],
+        unlisted_characters: ['character:rook', 'character:ghost', 'place:the-vault'],
+        developments: [
+          { entity: 'character:mara', fact: ' Mara stops watching the door. ', quote: 'Maara stopped watching it.' },
+          { entity: 'place:nowhere', fact: 'nothing', quote: '' },
+          { entity: 'character:rook', fact: '', quote: 'q' },
         ],
         rejected: [
           { quote: 'Maara', candidate: 'character:mara', why: 'a different word' },
           { quote: 'x', candidate: 'nope', why: '' },
           { quote: 'Everything must live and then die', candidate: 'character:rook', why: 'a theme, not the lifter' },
         ],
-        developments: [
-          { entity: 'character:mara', fact: ' Mara stops watching the door. ', quote: 'Maara stopped watching it.' },
-          { entity: 'place:nowhere', fact: 'nothing', quote: '' },
-          { entity: 'character:rook', fact: '', quote: 'q' },
-        ],
         notes: [
-          { kind: 'define', message: 'The Atacam has no page.', quote: 'the Atacam', name: 'the Atacam', defineAs: 'place' },
-          { kind: 'define', message: 'The Keepers are mentioned, but no lore page describes them.', quote: 'q', name: 'the Keeper', defineAs: 'lore' },
-          { kind: 'define', message: 'Rook is mentioned, but no page describes him.', quote: 'q', name: 'Rook', defineAs: 'character' },
-          { kind: 'define', message: 'trust is untracked.', quote: 'q', name: 'trust', defineAs: 'variable', variable: { id: 'trust', type: 'number', initial: '0', description: 'x' } },
-          { kind: 'define', message: 'Trust between them is state the story will want to test.', quote: 'q', name: 'Trust Level', defineAs: 'variable', variable: { id: 'Trust Level', type: 'number', initial: '0', description: 'How far.' } },
           { kind: 'continuity', message: 'The Keepers page says Keepers cannot be replaced, and this page says one is.', quote: 'q', against: { where: 'lore:the-keepers', quote: 'No Keeper can be replaced.' }, suggestion: 'Decide which holds and fix the other.' },
           { kind: 'continuity', message: 'A topic with no other end at all here.', quote: 'q' },
           { kind: 'continuity', message: 'Topic only', quote: 'q', against: { where: 'lore:the-keepers', quote: 'x' } },
-          { kind: 'define', message: 'Rook is here and not listed.', quote: 'Rook fed the stove.', entity: 'character:rook', defineAs: 'character' },
-          { kind: 'define', message: 'names nothing', quote: 'q' },
-          { kind: 'cast', message: 'an old kind', quote: 'q', name: 'x' },
+          { kind: 'define', message: 'an old kind that no longer exists in the answer', quote: 'q' },
           { kind: 'loose-end', message: '', quote: 'q' },
-          { kind: 'other', message: 'Something an editor would say.', quote: 'q', entity: 'character:ghost' },
+          { kind: 'other', message: 'Something an editor would say.', quote: 'q' },
         ],
       },
       'the text, where the door-woman stood, and Maara too',
@@ -149,7 +164,7 @@ describe('what the read leaves in the ledger', () => {
       rejected: [{ quote: 'Maara', candidate: 'character:mara', why: 'a different word' }],
       developments: [{ entity: 'character:mara', fact: 'Mara stops watching the door.', quote: 'Maara stopped watching it.' }],
       notes: [
-        { kind: 'define', message: 'The Atacam has no page.', quote: 'the Atacam', name: 'the Atacam', defineAs: 'place' },
+        { kind: 'define', message: 'The Atacam is mentioned, but no place page describes it.', quote: 'the Atacam', name: 'the Atacam', defineAs: 'place' },
         {
           kind: 'define',
           message: 'Trust between them is state the story will want to test.',
@@ -157,7 +172,9 @@ describe('what the read leaves in the ledger', () => {
           name: 'Trust Level',
           defineAs: 'variable',
           variable: { id: 'trust_level', type: 'number', initial: '0', description: 'How far.' },
+          effect: 'trust_level += 1',
         },
+        { kind: 'define', message: 'Rook is in the prose but not listed on the scene.', quote: '', entity: 'character:rook', defineAs: 'character' },
         {
           kind: 'continuity',
           message: 'The Keepers page says Keepers cannot be replaced, and this page says one is.',
@@ -165,22 +182,30 @@ describe('what the read leaves in the ledger', () => {
           suggestion: 'Decide which holds and fix the other.',
           against: { where: 'lore:the-keepers', quote: 'No Keeper can be replaced.' },
         },
-        { kind: 'define', message: 'Rook is here and not listed.', quote: 'Rook fed the stove.', entity: 'character:rook', defineAs: 'character' },
         { kind: 'other', message: 'Something an editor would say.', quote: 'q' },
       ],
     })
   })
 
-  test('a "not listed on the scene" note is dropped on a note or a page, which have no characters field', async () => {
+  test('an unlisted character is a scene\'s business; on a note or a page it is dropped', async () => {
     const s = await story()
     const dict = dictionary(s)
-    const output = {
-      mentions: [],
-      rejected: [],
-      developments: [],
-      notes: [{ kind: 'define', message: 'Rook is on this page but not listed anywhere.', quote: 'q', entity: 'character:rook', defineAs: 'character' }],
-    }
+    const output = { synonyms: [], untracked_entities: [], unlisted_characters: ['character:rook'], developments: [], rejected: [], notes: [] }
     expect(ledgerEntryFrom(output, 'the text', dict, 1, 'note:plan').notes).toEqual([])
     expect(ledgerEntryFrom(output, 'the text', dict, 1, 'scene:the-job-offer').notes).toHaveLength(1)
+  })
+
+  test('a variable filed under the entities, as an older prompt would, is still a proposal', async () => {
+    const s = await story()
+    const output = {
+      synonyms: [],
+      untracked_entities: [{ name: 'door_open', kind: 'variable', message: 'Whether the door is open is state.', quote: 'q', variable: { id: 'door_open', type: 'boolean', initial: 'false', description: 'd' }, effect: 'door_open = true' }],
+      developments: [],
+      rejected: [],
+      notes: [],
+    }
+    expect(ledgerEntryFrom(output, 'the text', dictionary(s), 1, 'scene:the-job-offer').notes).toEqual([
+      { kind: 'define', message: 'Whether the door is open is state.', quote: 'q', name: 'door_open', defineAs: 'variable', variable: { id: 'door_open', type: 'boolean', initial: 'false', description: 'd' }, effect: 'door_open = true' },
+    ])
   })
 })
