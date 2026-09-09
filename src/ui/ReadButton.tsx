@@ -46,10 +46,7 @@ export function ReadButton({
       {reading && (
         <span className="read-progress" role="status" aria-label="Reading">
           {progress && <span className="read-phase">{phaseWord(progress)}</span>}
-          <Elapsed since={progress?.startedAt} />
-          {progress?.phase === 'starting' && Date.now() - progress.startedAt > 20_000 && (
-            <span className="read-hint">no word from Claude Code yet — is the helper current? Settings checks it</span>
-          )}
+          <Elapsed since={progress?.startedAt} quietAfter={progress?.phase === 'starting' ? 20 : undefined} />
           {progress && progress.chars > 0 && <span className="read-chars">{progress.chars.toLocaleString()} chars</span>}
           {onCancel && (
             <button type="button" className="goto" onClick={onCancel}>
@@ -68,7 +65,7 @@ export function ReadButton({
 }
 
 /** Seconds since the read began — the app's start time, so leaving the page and coming back does not restart the count. */
-function Elapsed({ since }: { since?: number }) {
+function Elapsed({ since, quietAfter }: { since?: number; quietAfter?: number }) {
   const [fallback] = useState(() => Date.now())
   const started = since ?? fallback
   const [seconds, setSeconds] = useState(() => Math.max(0, Math.floor((Date.now() - started) / 1000)))
@@ -78,5 +75,12 @@ function Elapsed({ since }: { since?: number }) {
     const timer = window.setInterval(tick, 1000)
     return () => clearInterval(timer)
   }, [started])
-  return <span className="read-elapsed">{seconds}s</span>
+  return (
+    <>
+      <span className="read-elapsed">{seconds}s</span>
+      {quietAfter !== undefined && seconds > quietAfter && (
+        <span className="read-hint">no word from Claude Code yet — is the helper current? Settings checks it</span>
+      )}
+    </>
+  )
 }
