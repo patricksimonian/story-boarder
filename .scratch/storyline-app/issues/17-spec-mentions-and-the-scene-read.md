@@ -153,23 +153,29 @@ Patrick's read of a note in Uyuni, the same evening: continuity notes that were 
 
 "1 name refused" said nothing about which name: the summary now says "ruled out", and the block under Read lists each one — the phrase, the thing the read says it is not here, its reason — with an "It is X" that keeps it after all as a writer's verdict. And Patrick's raven king: a loose-end note that "the raven king" refers to King Naviro was the read filing a mention under the wrong heading. The rubric now says a phrase that means a roster thing under another name is a mention with that key, never a note; unconfirmed mentions are drawn in orange like the unknowns; and the card on one offers the connections in his words — confirm it, keep the phrase as a name for the thing (an alias written onto the page from wherever the writer is), pick something else that exists from a searchable roster, create something new, or say it is nothing. The orange-name card gets the same picker.
 
+Patrick, 2026-09-09, on the block under Read: the fixes ("Create a place for the cistern", "Declare mara_off_guard") gave no sign they had happened, and the editor's notes took the room whether wanted or not. The notes are now a fold, closed by default, whose summary says how many there are and how many are done; it stays open through the reload a fix causes. A define note whose fix is in the story reads that from the story, not from memory of the click, so a page made by hand counts too: the registry has the variable, the scene lists the character, or the matcher resolves the name to a page. Such a note turns green, its headline says what describes the thing now ("the cistern: a place page describes it now."), and a link goes to it.
+
 ## Evals
 
-`pnpm eval:coach` runs the real reads against invented fixtures under `evals/` (never a writer's own story) with stated expectations, N times each, and reports a pass rate; it spends usage and never runs with `pnpm test`. First haiku baseline, 2026-09-08, ten runs per case:
+`pnpm eval:coach` runs the real reads against invented fixtures under `evals/` (never a writer's own story) with stated expectations, N times each, and reports a pass rate; it spends usage and never runs with `pnpm test`. Three haiku baselines, ten runs per case, 2026-09-08 and 2026-09-09: the first with the old answer (mentions, notes with a define kind), the second after the answer was reshaped into `synonyms` and `untracked_entities`, the third after the variable job got its own field, `untracked_variables`.
 
-| expectation | haiku |
-|---|---|
-| Mara's Confession: defines the Warden | 10/10 |
-| Mara's Confession: a development about Mara | 9/10 |
-| Mara's Confession: does not define Mara, Rook, the Vault | 10/10 |
-| Salt queen: resolves "the salt queen" to Queen Ilsabet as a mention | 0/10 |
-| Salt queen: does not flag the salt queen as undefined | 10/10 |
-| Salt queen: defines the Drowned Choir | 10/10 |
-| Tide Bell: defines Brother Halvard (character) | 8/10 |
-| Tide Bell: defines the Glasswater marsh (place) | 7/10 |
-| Tide Bell: defines the Rite of Brine (lore) | 10/10 |
-| Tide Bell: proposes a variable for the bell or the closed crossing | 0/10 |
-| Tide Bell: does not define Teodor or Marrow Point | 10/10 |
+| expectation | first | synonyms + untracked_entities | + untracked_variables |
+|---|---|---|---|
+| Mara's Confession: defines the Warden | 10/10 | 10/10 | 10/10 |
+| Mara's Confession: a development about Mara | 9/10 | 10/10 | 10/10 |
+| Mara's Confession: does not define Mara, Rook, the Vault | 10/10 | 10/10 | 10/10 |
+| Salt queen: resolves "the salt queen" to Queen Ilsabet as a mention | 0/10 | 10/10 | 10/10 |
+| Salt queen: does not flag the salt queen as undefined | 10/10 | 10/10 | 10/10 |
+| Salt queen: defines the Drowned Choir | 10/10 | 9/10 | 10/10 |
+| Tide Bell: defines Brother Halvard (character) | 8/10 | 10/10 | 9/10 |
+| Tide Bell: defines the Glasswater marsh (place) | 7/10 | 9/10 | 9/10 |
+| Tide Bell: defines the Rite of Brine (lore) | 10/10 | 7/10 | 9/10 |
+| Tide Bell: proposes a variable for the bell or the closed crossing | 0/10 | 1/10 | 10/10 |
+| Tide Bell: does not define Teodor or Marrow Point | 10/10 | 10/10 | 10/10 |
 
-The two zeros are the same failure: a job buried in a field the model does not use. It knows the salt queen is Ilsabet (a loose-end note in run 4 says so, and it never defines her as missing) and never writes it under mentions; the mentions it does write are "what the page is about" ("the girl" → the note itself). And it never proposes a variable, though the scene says in words that a rung bell closes the crossing; the proposal is a clause inside the define paragraph. Missing characters, places, and lore, and the rule against defining what exists, are reliable.
+The first baseline's two zeros were the same failure: a job buried in a field the model does not use. It knew the salt queen was Ilsabet (a loose-end note in run 4 said so, and it never defined her as missing) and never wrote it under mentions; the mentions it did write were "what the page is about" ("the girl" → the note itself). And it never proposed a variable, though the scene says in words that a rung bell closes the crossing; the proposal was a clause inside the define paragraph.
+
+The second baseline fixed the synonym outright: a field called `synonyms`, with a paragraph of its own, and the model reaches for it every time. The variable stayed at one in ten, and the ten answers said why. Across thirty runs it proposed a variable three times, once per case, each one sound (`girl_has_tide_bell`, `girl_is_warden`, `mara_vault_goal_known`). In nine of ten tide-bell runs it filed "the tide bell" as lore (a relic) and "the crossing" as lore or a place, and stopped: it read the state and filed the object, because a variable was one value in the same `kind` enum as character, place, and lore, described in the sixth sentence of the `untracked_entities` paragraph. The Rite of Brine's dip to seven was the same crowding, "drowning" and "humming to the tide" taking the lore slots.
+
+The third baseline gives the variable its own field, `untracked_variables`, and its own paragraph ("an object the page hands over is an entity; that someone now holds it is state, and state is this job"), with the proposal required on every item. Ten of ten, and the Rite of Brine back to nine. Two things worth watching, neither changed yet. Every run now proposes one to three variables, and the second and third are sometimes thin ("whether Brother Halvard is watching this moment", "what the girl knows about the bell"); the ledger keeps them, and the writer declines them. And in four of ten tide-bell runs "the Salt Road" was flagged as an untracked place: it is the story's title, on Teodor's page gist in the briefing and nowhere on the scene. That is the read reporting from the briefing rather than the page; a guard that drops an untracked entity whose name is not on the page would catch it, but the eval hands `ledgerEntryFrom` the briefing as the text, so the eval would first have to pass the item's own text.
 

@@ -1,11 +1,14 @@
+import { useState } from 'react'
 import type { EditorNote } from '../assistant/ledger'
 
 /**
  * What the last read of this page found, shown where the writer pressed
  * Read: when it ran and what it recorded, the editor's notes with the
- * fixes the app can apply, then the developments themselves. A read
- * that found nothing says so rather than leaving the button to settle
- * back in silence.
+ * fixes the app can apply (folded until the writer opens them), then the
+ * developments themselves. A note whose fix has been applied — the page
+ * created, the variable declared, the character listed — turns green and
+ * links to the thing, whoever made it. A read that found nothing says so
+ * rather than leaving the button to settle back in silence.
  */
 export interface ReadInfo {
   summary: string
@@ -18,6 +21,8 @@ export interface ReadNote extends EditorNote {
   entityTitle?: string
   /** The fix the app can apply for this note, when it can. */
   action?: { label: string; run: () => void }
+  /** The fix is applied: what now describes the thing, and how to go there. */
+  done?: { headline: string; title: string; open: () => void }
   /** For a continuity note: the other end's title, and how to go there. */
   againstTitle?: string
   openAgainst?: () => void
@@ -49,19 +54,28 @@ function defineHeadline(note: ReadNote): string | null {
 }
 
 export function ReadOutcome({ read }: { read?: ReadInfo | null }) {
+  // Folded by default; the writer opens the notes when they want them,
+  // and they stay open through the reload a fix causes.
+  const [open, setOpen] = useState(false)
   if (!read) return null
+  const done = read.notes.filter((n) => n.done).length
   return (
     <div className="read-outcome" role="region" aria-label="Last read">
       <p className="read-summary">{read.summary}</p>
       {read.notes.length > 0 && (
-        <>
-          <h5 className="read-heading">Editor’s notes</h5>
+        <details className="read-fold" open={open} onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}>
+          <summary className="read-heading">
+            Editor’s notes ({read.notes.length}
+            {done > 0 ? `, ${done} done` : ''})
+          </summary>
           <ul className="read-notes" aria-label="Editor’s notes">
             {read.notes.map((note, i) => (
-              <li key={i} className={`read-note ${note.kind}`}>
-                <span className="read-kind">{KIND_LABEL[note.kind]}</span>
+              <li key={i} className={`read-note ${note.kind}${note.done ? ' done' : ''}`}>
+                <span className="read-kind">{note.done ? 'Done' : KIND_LABEL[note.kind]}</span>
                 <span className="read-message">
-                  {defineHeadline(note) ? (
+                  {note.done ? (
+                    <strong>{note.done.headline}</strong>
+                  ) : defineHeadline(note) ? (
                     <>
                       <strong>{defineHeadline(note)}</strong> {note.message}
                     </>
@@ -87,16 +101,21 @@ export function ReadOutcome({ read }: { read?: ReadInfo | null }) {
                     : <q>{note.against.quote}</q>
                   </span>
                 )}
-                {note.suggestion && <span className="read-suggestion">{note.suggestion}</span>}
-                {note.action && (
+                {note.suggestion && !note.done && <span className="read-suggestion">{note.suggestion}</span>}
+                {note.action && !note.done && (
                   <button type="button" className="goto" onClick={note.action.run}>
                     {note.action.label}
+                  </button>
+                )}
+                {note.done && (
+                  <button type="button" className="goto" onClick={note.done.open}>
+                    {note.done.title} ↗
                   </button>
                 )}
               </li>
             ))}
           </ul>
-        </>
+        </details>
       )}
       {read.developments.length > 0 && <h5 className="read-heading">Developments</h5>}
       {read.developments.length > 0 && (

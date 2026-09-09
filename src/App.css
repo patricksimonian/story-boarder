@@ -2829,6 +2829,25 @@ button.sb-pen:focus-visible {
 .read-note.define .read-kind {
   color: #e0862b;
 }
+.read-note.done {
+  border-top-style: solid;
+  border-left: 3px solid #3a7d44;
+  padding-left: 8px;
+  background: #eef7ee;
+}
+.read-note.done .read-kind {
+  color: #3a7d44;
+}
+.read-fold > summary {
+  cursor: pointer;
+  list-style: none;
+}
+.read-fold > summary::before {
+  content: '▸ ';
+}
+.read-fold[open] > summary::before {
+  content: '▾ ';
+}
 
 /* ---------- Claude Code's session limit ---------- */
 .limit-bar {

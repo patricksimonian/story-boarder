@@ -60,31 +60,34 @@ What the Vault held.
 The door-woman went in first.
 `
 
-/** A read that resolves "the door-woman" to Mara wherever it sees it, and records one development in the cistern. */
+/** A read that resolves "the door-woman" to Mara wherever it sees it, and records one development and two untracked things in the cistern. */
 function readingRunner(): StubProcessRunner {
   const runner = new StubProcessRunner()
   runner.answerWith<ReadSceneOutput>('read-scene', (stdin) => {
     const item = stdin.match(/\((scene:[a-z-]+|note:[a-z-]+)\)/)?.[1]
-    const mentions = /door-woman/.test(stdin) ? [{ quote: 'The door-woman', entity: 'character:mara' }] : []
+    const synonyms = /door-woman/.test(stdin) ? [{ phrase: 'The door-woman', entity: 'character:mara' }] : []
     const developments =
       item === 'scene:the-dry-cistern' ? [{ entity: 'character:mara', fact: 'Mara stops watching the door.', quote: 'The door-woman stopped watching it.' }] : []
-    const notes =
+    const untracked_entities =
       item === 'scene:the-dry-cistern'
         ? [
-            { kind: 'define', message: 'The cistern is somewhere the story returns to and has no page.', quote: 'Mara watched the door', name: 'the cistern', defineAs: 'place' },
-            {
-              kind: 'define',
-              message: 'Whether Mara has stopped keeping watch is state a later scene will want.',
-              quote: 'The door-woman stopped watching it.',
-              name: 'mara_off_guard',
-              defineAs: 'variable',
-              variable: { id: 'mara_off_guard', type: 'boolean', initial: 'false', description: 'Mara has let her guard down.' },
-            },
-            { kind: 'loose-end', message: 'Why she watches doors is raised and not answered.', quote: 'out of habit' },
+            { name: 'the cistern', kind: 'place', message: 'The cistern is somewhere the story returns to and has no page.', quote: 'Mara watched the door' },
           ]
         : []
+    const untracked_variables =
+      item === 'scene:the-dry-cistern'
+        ? [
+            {
+              name: 'mara_off_guard',
+              message: 'Whether Mara has stopped keeping watch is state a later scene will want.',
+              quote: 'The door-woman stopped watching it.',
+              variable: { id: 'mara_off_guard', type: 'boolean', initial: 'false', description: 'Mara has let her guard down.' },
+            },
+          ]
+        : []
+    const notes = item === 'scene:the-dry-cistern' ? [{ kind: 'loose-end', message: 'Why she watches doors is raised and not answered.', quote: 'out of habit' }] : []
     const rejected = item === 'scene:the-dry-cistern' ? [{ quote: 'Maara', candidate: 'character:mara', why: 'a different word here' }] : []
-    return { mentions, rejected, developments, notes }
+    return { synonyms, untracked_entities, untracked_variables, developments, rejected, notes }
   })
   return runner
 }
@@ -127,6 +130,12 @@ describe('the scene read', () => {
     expect(outcome).toHaveTextContent('Read just now: 3 editor’s notes, 2 things to define, 1 development, 1 phrase resolved')
     expect(within(outcome).queryByRole('list', { name: 'Names ruled out' })).not.toBeInTheDocument()
     expect(outcome).toHaveTextContent('Mara Mara stops watching the door.')
+    // The notes are folded until opened; the fold names how many there are.
+    const fold = within(outcome).getByText(/^Editor’s notes/)
+    expect(fold).toHaveTextContent('Editor’s notes (3)')
+    expect(fold.closest('details')?.open).toBe(false)
+    await userEvent.click(fold)
+    await waitFor(() => expect(fold.closest('details')?.open).toBe(true))
     expect(outcome).toHaveTextContent('Why she watches doors is raised and not answered.')
     expect(outcome).toHaveTextContent('the cistern: mentioned, but no place page describes it.')
     expect(within(outcome).getByRole('button', { name: 'Create a place for the cistern' })).toBeInTheDocument()
@@ -142,8 +151,16 @@ describe('the scene read', () => {
     await waitFor(async () => expect(await world.files.exists('places/the-cistern.md')).toBe(true))
     await waitFor(() => expect(mentionsIn(editor).find((el) => el.textContent === 'the cistern')?.className).toContain('mention-certain'))
 
-    // Declaring the proposed variable goes through the registry like a typed one.
-    await userEvent.click(within(within(editor).getByRole('region', { name: 'Last read' })).getByRole('button', { name: 'Declare mara_off_guard' }))
+    // The note turns green and links to the page; the fold stays open through the reload.
+    const after = () => within(editor).getByRole('region', { name: 'Last read' })
+    await waitFor(() => expect(after()).toHaveTextContent('the cistern: a place page describes it now.'))
+    expect(within(after()).getByText(/^Editor’s notes/)).toHaveTextContent('Editor’s notes (3, 1 done)')
+    expect(within(after()).getByText(/^Editor’s notes/).closest('details')?.open).toBe(true)
+    expect(within(after()).queryByRole('button', { name: 'Create a place for the cistern' })).not.toBeInTheDocument()
+    expect(within(after()).getByRole('button', { name: 'the cistern ↗' })).toBeInTheDocument()
+
+    // Declaring the proposed variable goes through the registry like a typed one, and the note says so.
+    await userEvent.click(within(after()).getByRole('button', { name: 'Declare mara_off_guard' }))
     await waitFor(async () =>
       expect(JSON.parse(await world.files.readText('variables.json')).variables).toContainEqual({
         id: 'mara_off_guard',
@@ -152,6 +169,8 @@ describe('the scene read', () => {
         description: 'Mara has let her guard down.',
       }),
     )
+    await waitFor(() => expect(after()).toHaveTextContent('mara_off_guard: tracked by the variable mara_off_guard.'))
+    expect(within(after()).getByRole('button', { name: 'mara_off_guard ↗' })).toBeInTheDocument()
 
     // Hovering the resolved phrase shows what this scene developed about her, and keeps it as her name in one click.
     await userEvent.hover(mentionsIn(editor).find((el) => el.textContent === 'The door-woman')!)

@@ -727,7 +727,11 @@ export default function App({
     const notes: ReadNote[] = (entry.notes ?? []).map((note) => {
       const shown: ReadNote = { ...note }
       if (note.entity) shown.entityTitle = dict?.targets.get(note.entity)?.title
-      if (note.kind === 'define') shown.action = defineAction(note, scene) ?? undefined
+      if (note.kind === 'define') {
+        const done = defineDone(note, scene)
+        if (done) shown.done = done
+        else shown.action = defineAction(note, scene) ?? undefined
+      }
       if (note.against) {
         const target = dict?.targets.get(note.against.where)
         shown.againstTitle = target?.title ?? note.against.where
@@ -740,6 +744,39 @@ export default function App({
       notes,
       developments: entry.developments.map((d) => ({ title: dict?.targets.get(d.entity)?.title ?? d.entity, fact: d.fact, quote: d.quote })),
     }
+  }
+
+  /**
+   * A define note whose fix is in the story now — by the button or by
+   * hand — reads from the story, not from memory of the click: the
+   * registry has the variable, the scene lists the character, or a page
+   * the matcher resolves the name to exists.
+   */
+  function defineDone(note: EditorNote, scene: Scene | undefined): ReadNote['done'] | undefined {
+    const current = loadedRef.current
+    if (!current || !dict) return undefined
+    const { story } = current
+    if (note.defineAs === 'variable' && note.variable) {
+      const id = note.variable.id
+      if (!story.registry.variables.some((v) => v.id === id)) return undefined
+      return { headline: `${note.name ?? id}: tracked by the variable ${id}.`, title: id, open: () => void openTarget(`variable:${id}`) }
+    }
+    if (note.entity) {
+      const known = parseTargetKey(note.entity)
+      const listed = draftRef.current?.scene.id === scene?.id ? draftRef.current?.scene : scene
+      if (known?.kind !== 'character' || !listed?.characters.includes(known.id)) return undefined
+      const title = dict.targets.get(note.entity)?.title ?? known.id
+      return { headline: `${title} is listed on the scene.`, title, open: () => void openTarget(note.entity!) }
+    }
+    if (!note.name || !note.defineAs) return undefined
+    const wanted = note.defineAs
+    const target = findMentions(note.name, dict)
+      .filter((span) => span.certainty === 'certain')
+      .flatMap((span) => span.targets)
+      .find((t) => t.kind === wanted) ?? findMentions(note.name, dict).find((span) => span.certainty === 'certain')?.targets[0]
+    if (!target) return undefined
+    const noun = target.kind === 'scene' || target.kind === 'note' ? target.kind : `${target.kind} page`
+    return { headline: `${note.name}: a ${noun} describes it now.`, title: target.title, open: () => void openTarget(targetKey(target)) }
   }
 
   /** The one-click fix for a define note: declare the variable, add the character to the scene, or create the thing. */
