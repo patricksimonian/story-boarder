@@ -109,13 +109,6 @@ export async function deleteNote(files: FileAccess, id: Slug): Promise<void> {
   await files.delete(`notes/${id}.md`)
 }
 
-/** Records which GitHub repository this story syncs with. The token never goes here. */
-export async function setSyncRemote(files: FileAccess, remote: { owner: string; repo: string }): Promise<void> {
-  const manifest = await readManifest(files)
-  manifest.settings = { ...manifest.settings, sync: remote }
-  await writeManifest(files, manifest)
-}
-
 export interface NewScene {
   title: string
   storylines: Slug[]

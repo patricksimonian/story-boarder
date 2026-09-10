@@ -74,5 +74,5 @@ The user-chosen local folder holding the entire story as plain files — always 
 _Avoid_: Workspace, project directory, vault
 
 **Sync**:
-Background reconciliation of the story folder with the user's own GitHub remote; every save is a commit.
+Background reconciliation of the story folder with the user's own GitHub remote; every save is a commit. Unwired since September 2026: commits stay in the folder's local history until GitHub sign-in lands.
 _Avoid_: Backup, upload, cloud save

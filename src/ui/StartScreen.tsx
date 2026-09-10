@@ -7,7 +7,6 @@ export function StartScreen({
   onPick,
   onOpenRecent,
   onStartNew,
-  onPullRemote,
   onImport,
 }: {
   recents: string[]
@@ -18,7 +17,6 @@ export function StartScreen({
   onOpenRecent: (name: string) => void
   /** Starts a story in the empty folder — from a template when one is named, bare otherwise. */
   onStartNew: (template?: string) => void
-  onPullRemote: () => void
   onImport: () => void
 }) {
   return (
@@ -48,11 +46,6 @@ export function StartScreen({
             </button>
           ))}
         </div>
-      )}
-      {emptyFolder && (
-        <button className="start-open start-new" onClick={onPullRemote}>
-          Pull a story from GitHub into {emptyFolder}
-        </button>
       )}
       {emptyFolder && (
         <button className="start-open start-new" onClick={onImport}>

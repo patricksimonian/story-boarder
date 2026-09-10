@@ -7,9 +7,7 @@ import { parseNoteFile, serializeNoteFile } from './files/noteFile'
 import { parseReferenceFile, serializeReferenceFile } from './files/referenceFile'
 import { parseSceneFile, serializeSceneFile } from './files/sceneFile'
 import { reconcileJournal, type JournalConflict } from './editor/reconcile'
-import { DEFAULT_IDENT, folderGit } from './git/client'
-import { gitHubRemote, type GitHubSpot } from './git/github'
-import { completeMerge, sync as syncStory, type Remote } from './git/sync'
+import { folderGit } from './git/client'
 import { exportPlayable, type ExportResult } from './interchange/export'
 import { importToFiles } from './interchange/import'
 import { applySuggestion, type LiftSuggestion } from './interchange/lift'
@@ -53,7 +51,6 @@ import {
   storeAsset,
   savePlaythrough,
   saveRegistry,
-  setSyncRemote,
   setWordGoal,
   updateStoryline,
   writeManifest,
@@ -69,7 +66,6 @@ import { ExportNote, type ExportState } from './ui/ExportNote'
 import { GraphView } from './ui/GraphView'
 import { CheckpointDialog, HistoryView } from './ui/HistoryView'
 import { ImportDialog, LiftDialog } from './ui/ImportDialogs'
-import { PullDialog, SyncView, type SyncSettings } from './ui/SyncView'
 import { NewActDialog, NewSceneDialog, NewStorylineDialog, type Creating } from './ui/CreateDialog'
 import { Minimap } from './ui/Minimap'
 import { mimeOf } from './ui/images'
@@ -89,15 +85,12 @@ import { Sidebar } from './ui/Sidebar'
 import { StartScreen } from './ui/StartScreen'
 import { VariablesView } from './ui/VariablesView'
 
-const TOKEN_KEY = 'storyline-app:github-token'
-
-/** The GitHub spot for a story: owner and repo from its settings, the token from this browser. */
-function spotFrom(manifest: StoryManifest | undefined): GitHubSpot | null {
-  const sync = (manifest?.settings as { sync?: SyncSettings } | undefined)?.sync
-  const token = localStorage.getItem(TOKEN_KEY)
-  if (!sync?.owner || !sync.repo || !token) return null
-  return { owner: sync.owner, repo: sync.repo, token }
-}
+/**
+ * Earlier builds kept a GitHub token in this browser's storage. Sync is
+ * unwired for now and no token may live there, so a leftover is removed
+ * at launch.
+ */
+const STALE_TOKEN_KEY = 'storyline-app:github-token'
 
 /** A flagged file open for raw editing; dirty when text has moved past savedText. */
 interface RawEdit {
@@ -159,7 +152,6 @@ export default function App({
   readIdleMs = 4000,
   autosaveDelayMs = 1000,
   boundaryIdleMs = 180000,
-  makeRemote = (spot: GitHubSpot) => gitHubRemote(spot),
 }: {
   platform: Platform
   /** How the writer's own Claude Code gets spawned; absent where nothing can spawn it. */
@@ -172,8 +164,6 @@ export default function App({
   autosaveDelayMs?: number
   /** How long the folder rests before an idle boundary commit. */
   boundaryIdleMs?: number
-  /** How a GitHub spot becomes a Remote — tests hand in a fake. */
-  makeRemote?: (spot: GitHubSpot) => Remote
 }) {
   const [folder, setFolder] = useState<OpenedFolder | null>(null)
   const [loaded, setLoaded] = useState<LoadedStory | null>(null)
@@ -189,10 +179,8 @@ export default function App({
   const [editing, setEditing] = useState<Editing | null>(null)
   const [dragging, setDragging] = useState<Dragging | null>(null)
   const [checkpointOpen, setCheckpointOpen] = useState(false)
-  const [syncStatus, setSyncStatus] = useState<string | null>(null)
   /** Why the last commit failed, shown beside History until one succeeds. */
   const [commitProblem, setCommitProblem] = useState<string | null>(null)
-  const [pullOpen, setPullOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [liftOffers, setLiftOffers] = useState<LiftSuggestion[] | null>(null)
   const [exportState, setExportState] = useState<ExportState | null>(null)
@@ -313,6 +301,10 @@ export default function App({
     void platform.recents().then(setRecents)
   }, [platform])
 
+  useEffect(() => {
+    localStorage.removeItem(STALE_TOKEN_KEY)
+  }, [])
+
   // A pending save dies with the component: a crash gets no cleanup hook
   // either, and the journal is what covers both.
   useEffect(() => () => clearTimeout(saveTimer.current), [])
@@ -322,25 +314,16 @@ export default function App({
    * generated message. Commits are serialized through one queue so a
    * fast scene-switch can't race the open-time sweep; a declined commit
    * (nothing changed) costs a hash walk and writes nothing. A commit
-   * that fails says so in the sidebar; a sync that fails says so in the
-   * Sync view — neither is allowed to vanish.
+   * that fails says so in the sidebar and is not allowed to vanish.
    */
   const commitQueue = useRef(Promise.resolve())
-  /** Set while a pulled divergence waits on the writer; the remote head to merge with. */
-  const pendingMergeHead = useRef<string | null>(null)
   const commitFailed = (error: unknown) => setCommitProblem(`Could not commit: ${(error as Error).message}`)
-  const syncFailed = (error: unknown) => setSyncStatus(`Sync failed: ${(error as Error).message}`)
-  function boundaryCommit(target: OpenedFolder | null = folder, manifest = loaded?.story.manifest): void {
+  function boundaryCommit(target: OpenedFolder | null = folder): void {
     if (!target) return
     const { files } = target
-    const spot = spotFrom(manifest)
     commitQueue.current = commitQueue.current
       .then(() => folderGit(files).commitBoundary())
-      .then(() => {
-        setCommitProblem(null)
-        return spot ? performSync(target, spot) : undefined
-      }, commitFailed)
-      .then(() => undefined, syncFailed)
+      .then(() => setCommitProblem(null), commitFailed)
   }
 
   // A few minutes of quiet after the last disk change is a boundary too.
@@ -354,14 +337,8 @@ export default function App({
   function commitCheckpoint(message: string): Promise<string | null> {
     if (!folder) return Promise.resolve(null)
     const target = folder
-    const spot = spotFrom(loaded?.story.manifest)
     const run = commitQueue.current.then(() => folderGit(target.files).checkpoint(message))
-    commitQueue.current = run
-      .then((sha) => {
-        setCommitProblem(null)
-        return sha && spot ? performSync(target, spot) : undefined
-      }, commitFailed)
-      .then(() => undefined, syncFailed)
+    commitQueue.current = run.then(() => setCommitProblem(null), commitFailed)
     return run
   }
 
@@ -380,84 +357,6 @@ export default function App({
     }
   })
   useEffect(() => platform.onCloseRequested?.(() => onCloseRef.current()), [platform])
-
-  /** Runs one sync and turns the outcome into words for the Sync view. */
-  async function performSync(target: OpenedFolder, spot: GitHubSpot): Promise<void> {
-    const result = await syncStory(target.files, makeRemote(spot), DEFAULT_IDENT)
-    const s = (n: number) => (n === 1 ? '' : 's')
-    switch (result.kind) {
-      case 'clean':
-        setSyncStatus('Up to date')
-        break
-      case 'pushed':
-        setSyncStatus(`Pushed ${result.commits} commit${s(result.commits)}`)
-        break
-      case 'offline':
-        setSyncStatus('Offline — commits stay local and push when the network returns')
-        break
-      case 'pulled':
-        setSyncStatus(`Pulled ${result.commits} commit${s(result.commits)}`)
-        await followPulledFiles(target, result.changed)
-        await reload(target)
-        break
-      case 'merged':
-        if (result.conflicts.length === 0) {
-          setSyncStatus('Merged work from the remote')
-        } else {
-          setSyncStatus(`${result.conflicts.length} overlap${s(result.conflicts.length)} to settle side by side`)
-          pendingMergeHead.current = result.remoteHead
-          const mapped = result.conflicts.map((c) => ({
-            path: c.path,
-            diskText: c.theirs ?? '',
-            appText: c.mine ?? '',
-          }))
-          queuedConflicts.current.push(...mapped.slice(1))
-          setConflict(mapped[0])
-        }
-        await reload(target)
-        break
-    }
-  }
-
-  /** After a pull, the open draft follows the disk the same way watcher events do. */
-  async function followPulledFiles(target: OpenedFolder, changed: string[]): Promise<void> {
-    const current = draftRef.current
-    if (!current || !changed.includes(current.path)) return
-    const diskText = await target.files.readText(current.path).catch(() => '')
-    if (diskText === current.diskText) return
-    if (isDirty(current)) setConflict({ path: current.path, diskText, appText: serializeSceneFile(current.scene) })
-    else replaceDraft(current, diskText)
-  }
-
-  /**
-   * Joins a story from another machine: the picked empty folder receives
-   * the whole repository, the settings learn the remote if the pulled
-   * manifest doesn't carry it, and the folder opens like any other.
-   */
-  async function pullIntoEmpty(spot: GitHubSpot): Promise<void> {
-    const target = emptyFolder
-    if (!target) return
-    localStorage.setItem(TOKEN_KEY, spot.token)
-    try {
-      const result = await syncStory(target.files, makeRemote(spot), DEFAULT_IDENT)
-      if (result.kind !== 'pulled') {
-        setStartError(
-          result.kind === 'offline'
-            ? 'Could not reach GitHub — check the network and try again.'
-            : 'That repository holds nothing to pull.',
-        )
-        return
-      }
-      const manifest = JSON.parse(await target.files.readText('story.json')) as {
-        settings?: { sync?: unknown }
-      }
-      if (!manifest.settings?.sync) await setSyncRemote(target.files, { owner: spot.owner, repo: spot.repo })
-      setPullOpen(false)
-      await open(target)
-    } catch (error) {
-      setStartError(`Could not pull the story: ${(error as Error).message}`)
-    }
-  }
 
   /**
    * Imports a picked file into the empty folder: the content decides
@@ -515,25 +414,6 @@ export default function App({
       return
     }
     setExportState({ kind: 'saved', path })
-  }
-
-  /** Saves the remote — owner and repo with the story, the token app-local — then syncs. */
-  async function saveSync(spot: GitHubSpot): Promise<void> {
-    if (!folder) return
-    const target = folder
-    localStorage.setItem(TOKEN_KEY, spot.token)
-    const current = spotFrom(loaded?.story.manifest)
-    if (current?.owner !== spot.owner || current?.repo !== spot.repo) {
-      await setSyncRemote(target.files, { owner: spot.owner, repo: spot.repo })
-      await reload(target)
-    }
-    commitQueue.current = commitQueue.current
-      .then(() => folderGit(target.files).commitBoundary())
-      .then(() => performSync(target, spot))
-      .then(
-        () => undefined,
-        () => undefined,
-      )
   }
 
   const setView = (next: View) => {
@@ -1261,8 +1141,8 @@ export default function App({
     await platform.rememberOpened(opened).catch(() => {})
     // Opening is a boundary: the first ever commit sweeps the folder as
     // it stands; a reopen commits whatever changed while the app was
-    // away — and with a remote configured, sync follows, pull first.
-    boundaryCommit(opened, result.loaded.story.manifest)
+    // away.
+    boundaryCommit(opened)
   }
 
   /**
@@ -1297,7 +1177,6 @@ export default function App({
     setEditing(null)
     setPoolOpen(false)
     setExportState(null)
-    setSyncStatus(null)
     setStartError(null)
     setFolder(null)
     setLoaded(null)
@@ -1481,8 +1360,7 @@ export default function App({
     if (!folder || !conflict) return
     const { path } = conflict
     const text = choice === 'mine' ? mineText : conflict.diskText
-    // Written either way: for a disk conflict the disk text is already
-    // there (a no-op); for a sync overlap the remote's text is not.
+    // Written either way; taking the disk side puts back what is already there.
     await folder.files.writeText(path, text)
     await folder.journal.clear(path)
     if (rawEdit && rawEdit.path === path) {
@@ -1505,18 +1383,6 @@ export default function App({
     }
     const next = queuedConflicts.current.shift() ?? null
     setConflict(next)
-    if (!next && pendingMergeHead.current) {
-      // Every overlap settled: record the merge commit, then push it.
-      const remoteHead = pendingMergeHead.current
-      pendingMergeHead.current = null
-      const { files } = folder
-      const target = folder
-      const spot = spotFrom(loaded?.story.manifest)
-      commitQueue.current = commitQueue.current
-        .then(() => completeMerge(files, remoteHead, DEFAULT_IDENT))
-        .then(() => (spot ? performSync(target, spot) : undefined))
-        .then(() => undefined, () => undefined)
-    }
     await reload(folder)
   }
 
@@ -1598,10 +1464,8 @@ export default function App({
           onPick={() => void pickAndOpen(() => platform.pickFolder())}
           onOpenRecent={(name) => void pickAndOpen(() => platform.openRecent(name))}
           onStartNew={(template) => void startNewStory(template)}
-          onPullRemote={() => setPullOpen(true)}
           onImport={() => setImportOpen(true)}
         />
-        {pullOpen && <PullDialog onPull={(spot) => void pullIntoEmpty(spot)} onCancel={() => setPullOpen(false)} />}
         {importOpen && (
           <ImportDialog onFile={(file) => void importStoryFile(file)} onCancel={() => setImportOpen(false)} />
         )}
@@ -1811,14 +1675,6 @@ export default function App({
             onCancelRead={() => {
               if (refItem) cancelRead(refItem)
             }}
-          />
-        )}
-        {view.level === 'sync' && (
-          <SyncView
-            settings={(story.manifest.settings as { sync?: SyncSettings }).sync ?? null}
-            token={localStorage.getItem(TOKEN_KEY) ?? ''}
-            status={syncStatus}
-            onSave={(spot) => void saveSync(spot)}
           />
         )}
         {view.level === 'settings' && (

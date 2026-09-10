@@ -29,7 +29,7 @@ export interface FolderWatcher {
   watch(handler: FolderChangeHandler): () => void
 }
 
-/** Grows again with sync: push and pull arrive with the GitHub remote. */
+/** Local history only for now; push and pull return with GitHub sign-in. */
 export interface GitClient {
   /** Commits everything changed under a generated message; null when the folder is clean. */
   commitBoundary(): Promise<string | null>

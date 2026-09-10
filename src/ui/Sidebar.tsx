@@ -177,9 +177,6 @@ export function Sidebar({
           {commitProblem}
         </div>
       )}
-      <button className={`sb-item ${view.level === 'sync' ? 'active' : ''}`} onClick={() => onView({ level: 'sync' })}>
-        ⇅ Sync
-      </button>
       {children}
       <div className="sb-hint">
         Esc zooms out · ←/→ acts
