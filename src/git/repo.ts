@@ -86,16 +86,24 @@ export async function writeMainRef(files: FileAccess, sha: string): Promise<void
  * declining, when the folder matches what main already points at. With
  * `mergeParent` it always commits, carrying two parents: a merge must be
  * recorded even when its tree matches one side.
+ *
+ * The message is a string, or a function of what the commit holds
+ * against its parent. The function is handed the snapshot's own blobs,
+ * never a second look at the folder: the app keeps writing while a walk
+ * is out, and a message read from the folder afterwards would describe
+ * a file the commit never held.
  */
 export async function commitAll(
   files: FileAccess,
-  message: string,
+  message: string | ((changes: FileChange[]) => string),
   ident: RepoIdent,
   opts: { time?: number; mergeParent?: string } = {},
 ): Promise<string | null> {
   const tree = (await snapshotTree(files, '')) as string
   const parent = await head(files)
-  if (!opts.mergeParent && parent && (await readCommit(files, parent)).tree === tree) return null
+  const parentTree = parent ? (await readCommit(files, parent)).tree : null
+  if (!opts.mergeParent && parentTree === tree) return null
+  const text = typeof message === 'string' ? message : message(await changesBetween(files, parentTree, tree))
 
   const time = opts.time ?? Math.floor(Date.now() / 1000)
   const who = { ...ident, time, tz: '+0000' }
@@ -106,7 +114,7 @@ export async function commitAll(
     parents,
     author: who,
     committer: who,
-    message,
+    message: text,
   }
   const sha = await writeObject(files, 'commit', encodeCommit(commit))
   await writeMainRef(files, sha)
@@ -115,7 +123,35 @@ export async function commitAll(
 
 /** The blob a commit holds at a path, or null when nothing is there. */
 async function blobShaAt(files: FileAccess, commitSha: string, path: string): Promise<string | null> {
-  let sha = (await readCommit(files, commitSha)).tree
+  return blobShaInTree(files, (await readCommit(files, commitSha)).tree, path)
+}
+
+/**
+ * One tree against another (or against nothing), as before/after texts
+ * read from the object store — what the commit-message generator wants
+ * to hear about, taken from what the commit actually holds.
+ */
+async function changesBetween(files: FileAccess, beforeTree: string | null, afterTree: string): Promise<FileChange[]> {
+  const text = async (sha: string | null) => (sha ? new TextDecoder().decode((await readObject(files, sha)).body) : null)
+  const changes: FileChange[] = []
+  const after = await treePaths(files, afterTree, '')
+  for (const path of after) {
+    const now = await blobShaInTree(files, afterTree, path)
+    const then = beforeTree ? await blobShaInTree(files, beforeTree, path) : null
+    if (now !== then) changes.push({ path, before: await text(then), after: await text(now) })
+  }
+  if (beforeTree) {
+    const held = new Set(after)
+    for (const path of await treePaths(files, beforeTree, '')) {
+      if (!held.has(path)) changes.push({ path, before: await text(await blobShaInTree(files, beforeTree, path)), after: null })
+    }
+  }
+  return changes
+}
+
+/** The blob a tree holds at a path, or null when nothing is there. */
+async function blobShaInTree(files: FileAccess, treeSha: string, path: string): Promise<string | null> {
+  let sha = treeSha
   const parts = path.split('/')
   for (let i = 0; i < parts.length; i++) {
     const wantDir = i < parts.length - 1
@@ -188,12 +224,16 @@ async function worktreePaths(files: FileAccess, dir = ''): Promise<string[]> {
   return paths
 }
 
-/** Every file path a tree holds, recursively. */
+/**
+ * Every file path a tree holds, recursively — the files at each level
+ * before its folders, the order the folder walk reads in, so story.json
+ * leads a commit message the way it always has.
+ */
 async function treePaths(files: FileAccess, treeSha: string, prefix: string): Promise<string[]> {
-  const paths: string[] = []
-  for (const entry of decodeTree((await readObject(files, treeSha)).body)) {
+  const entries = decodeTree((await readObject(files, treeSha)).body)
+  const paths = entries.filter((e) => e.mode !== '40000').map((e) => `${prefix}${e.name}`)
+  for (const entry of entries) {
     if (entry.mode === '40000') paths.push(...(await treePaths(files, entry.sha, `${prefix}${entry.name}/`)))
-    else paths.push(`${prefix}${entry.name}`)
   }
   return paths
 }

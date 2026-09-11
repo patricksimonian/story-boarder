@@ -1,14 +1,6 @@
 import type { FileAccess, GitClient } from '../adapters/types'
 import { describeChanges } from './describe'
-import {
-  changedSince,
-  commitAll,
-  head,
-  init,
-  log,
-  readFileAt,
-  type RepoIdent,
-} from './repo'
+import { commitAll, init, log, readFileAt, type RepoIdent } from './repo'
 
 /**
  * The GitClient the app holds for one story folder. Until PAT setup
@@ -18,11 +10,10 @@ import {
 export const DEFAULT_IDENT: RepoIdent = { name: 'Storyline', email: 'storyline@local' }
 
 export function folderGit(files: FileAccess, ident: RepoIdent = DEFAULT_IDENT): GitClient {
+  /** One walk of the folder: a boundary's message is written from the snapshot that walk took. */
   async function commit(message: string | null): Promise<string | null> {
     await init(files)
-    const changes = await changedSince(files, await head(files))
-    if (changes.length === 0) return null
-    return commitAll(files, message ?? describeChanges(changes), ident)
+    return commitAll(files, message ?? describeChanges, ident)
   }
 
   return {

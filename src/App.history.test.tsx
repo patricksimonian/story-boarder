@@ -3,8 +3,9 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, test } from 'vitest'
 import App from './App'
 import { InMemoryFileAccess } from './adapters/stubs'
+import { parseSceneFile } from './files/sceneFile'
 import { folderGit } from './git/client'
-import { changedSince, commitAll, init } from './git/repo'
+import { changedSince, commitAll, init, readFileAt } from './git/repo'
 import { embersWorld, type TestWorld } from './test/embers'
 
 beforeEach(() => {
@@ -84,6 +85,47 @@ describe('boundary commits', () => {
     )
   })
 
+  test('a boundary that overlaps typing commits the snapshot it took, and says what that snapshot holds', async () => {
+    // The open boundary hashes every file in the folder; on a loaded
+    // machine that walk outlasts the 20ms autosave and catches the first
+    // keystroke. The message used to come from a separate read of the
+    // folder, so a commit could say "Edit scene: Cold Open: Lowmarket"
+    // of a space the parser trims while its tree held the whole sentence.
+    // Slow reads make the walk long for certain.
+    const world = await openEmbers()
+    await waitFor(async () => expect(await logOf(world)).toHaveLength(1))
+    const read = world.files.readBinary.bind(world.files)
+    world.files.readBinary = async (path) => {
+      await new Promise((r) => setTimeout(r, 6))
+      return read(path)
+    }
+
+    await userEvent.click(screen.getAllByRole('button', { name: 'Open scene Cold Open: Lowmarket' })[0])
+    const editor = await screen.findByRole('dialog', { name: /scene editor/i })
+    const synopsis = within(editor).getByRole('textbox', { name: /synopsis/i })
+    // A slow keystroke: the space alone reaches the autosave while the walk
+    // is still out, and the rest lands while it is still out too. Reads run
+    // at full speed again before the close, so its own commit is quick.
+    await userEvent.type(synopsis, ' ')
+    await new Promise((r) => setTimeout(r, 60))
+    await userEvent.type(synopsis, 'It gets worse.')
+    world.files.readBinary = read
+    await userEvent.keyboard('{Escape}')
+
+    await waitFor(async () =>
+      expect((await logOf(world))[0].message).toBe('Edit scene: Cold Open: Lowmarket — synopsis edited'),
+    )
+    // Every scene commit tells the truth about the file it holds: it says
+    // the synopsis was edited exactly when the synopsis it holds differs.
+    const commits = (await logOf(world)).filter((c) => c.message.startsWith('Edit scene:'))
+    expect(commits.length).toBeGreaterThan(0)
+    for (const commit of commits) {
+      const held = (await readFileAt(world.files, commit.id, 'scenes/cold-open.md')) ?? ''
+      const parsed = parseSceneFile('cold-open', held)
+      expect(parsed.ok && parsed.scene.synopsis !== 'A grain lift goes sideways.').toBe(commit.message.includes('synopsis edited'))
+    }
+  })
+
   test('an untouched close commits nothing', async () => {
     const world = await openEmbers()
     await waitFor(async () => expect(await logOf(world)).toHaveLength(1))
@@ -138,13 +180,17 @@ describe('boundary commits', () => {
     const editor = await screen.findByRole('dialog', { name: /scene editor/i })
     await userEvent.type(within(editor).getByRole('textbox', { name: /synopsis/i }), ' It gets worse.')
     await userEvent.keyboard('{Escape}')
-    await waitFor(async () => expect(await logOf(world)).toHaveLength(2))
+    // The close's commit is the one claimed; on a loaded machine the open
+    // boundary may have committed a keystroke of its own before it.
+    await waitFor(async () =>
+      expect((await logOf(world))[0].message).toBe('Edit scene: Cold Open: Lowmarket — synopsis edited'),
+    )
 
     await userEvent.click(screen.getByRole('button', { name: /🕘 history/i }))
     const view = await screen.findByRole('region', { name: /history/i })
     const items = await within(view).findAllByRole('listitem')
     expect(items[0]).toHaveTextContent('Edit scene: Cold Open: Lowmarket — synopsis edited')
-    expect(items[1]).toHaveTextContent(/^New story: Embers of the Vault/)
+    expect(items.at(-1)).toHaveTextContent(/^New story: Embers of the Vault/)
   })
 
   // Building and walking 55 real commits is hundreds of async zlib round

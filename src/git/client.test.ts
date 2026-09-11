@@ -58,6 +58,37 @@ describe('boundary commits', () => {
     expect(commits).toHaveLength(2)
     expect(commits[0].message).toBe('Edit scene: Rooftop Duel — prose +5 words')
   })
+
+  it('describes the snapshot it took, not the folder as it stands once the walk is over', async () => {
+    // The app keeps saving while a boundary walks the folder. The message
+    // used to come from a second read of the folder, so it could name a
+    // file the commit never held; now message and tree come from one walk.
+    const files = await storyFolder()
+    const git = folderGit(files, IDENT)
+    await git.commitBoundary()
+
+    const scene = 'scenes/rooftop-duel.md'
+    const five = SCENE.replace('No witnesses except everyone.', 'No witnesses except everyone, and the fog keeps notes.')
+    const ten = SCENE.replace('No witnesses except everyone.', 'No witnesses except everyone, and the fog keeps notes on every one of them.')
+    await files.writeText(scene, five)
+    // The walk reads the scene once; right after, the writer's next save lands.
+    const read = files.readBinary.bind(files)
+    let seen = 0
+    files.readBinary = async (path) => {
+      const bytes = await read(path)
+      if (path === scene && seen++ === 0) await files.writeText(scene, ten)
+      return bytes
+    }
+
+    const sha = (await git.commitBoundary()) as string
+    expect((await git.log())[0].message).toBe('Edit scene: Rooftop Duel — prose +5 words')
+    expect(await git.readFileAt(sha, scene)).toBe(five)
+    // The later save is not lost: the next boundary picks it up.
+    files.readBinary = read
+    const next = (await git.commitBoundary()) as string
+    expect((await git.log())[0].message).toBe('Edit scene: Rooftop Duel — prose +5 words')
+    expect(await git.readFileAt(next, scene)).toBe(ten)
+  })
 })
 
 describe('checkpoints', () => {
