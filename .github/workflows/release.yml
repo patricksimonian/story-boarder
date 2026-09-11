@@ -1,9 +1,13 @@
-# Builds the Windows installer, signs it when a SignPath project is
-# configured, and attaches it to the GitHub release that triggered the run.
+# Cuts a release and builds the Windows installer for it.
 #
-# Two ways in: publish a release on GitHub (the installer lands on it a
-# few minutes later), or run the workflow by hand with a tag to attach an
-# installer to a release that already exists — a rerun replaces the file.
+# Run it by hand with the version to release. The first job, on Linux,
+# moves package.json to that version, folds the changesets under
+# .changeset/ into CHANGELOG.md and the release notes, commits, tags
+# vX.Y.Z, pushes both, and opens a draft release carrying the notes. The
+# second, on Windows, checks out the tag, tests, builds the installer,
+# signs it when a SignPath project is configured, attaches it, and
+# publishes the release. A failed build leaves the draft and the tag in
+# place; "Re-run failed jobs" picks up from the tag.
 #
 # Signing is opt-in through repository variables so the workflow runs
 # unsigned until the SignPath Foundation application is approved:
@@ -12,12 +16,10 @@
 name: release
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
-      tag:
-        description: 'Tag of the release to attach the installer to (e.g. v0.1.0)'
+      version:
+        description: 'Version to release, e.g. 0.2.0 — package.json is bumped and the tag cut for you'
         required: true
         type: string
 
@@ -26,14 +28,57 @@ permissions:
   actions: read
 
 jobs:
+  cut:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.cut.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Bump, write the notes, tag, and open a draft release
+        id: cut
+        env:
+          VERSION: ${{ inputs.version }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$GITHUB_REF_NAME" != "$DEFAULT_BRANCH" ]; then
+            echo "Releases are cut from $DEFAULT_BRANCH; this run is on $GITHUB_REF_NAME."
+            exit 1
+          fi
+          version="${VERSION#v}"
+          tag="v$version"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "$tag already exists — pick the next version."
+            exit 1
+          fi
+
+          # Refuses a version that is not x.y.z or does not move forward, and a release with no changesets.
+          node scripts/release.mjs "$version" --notes "$RUNNER_TEMP/notes.md"
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package.json CHANGELOG.md .changeset
+          git commit -m "$version"
+          git tag "$tag"
+          git push origin "HEAD:$GITHUB_REF_NAME" "$tag"
+
+          gh release create "$tag" --draft --title "$version" --notes-file "$RUNNER_TEMP/notes.md"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
   windows:
+    needs: cut
     runs-on: windows-latest
     env:
-      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      RELEASE_TAG: ${{ needs.cut.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name || inputs.tag }}
+          ref: ${{ needs.cut.outputs.tag }}
 
       - uses: pnpm/action-setup@v4
 
@@ -47,17 +92,6 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-
-      - name: The tag must match package.json
-        shell: bash
-        run: |
-          # A tag is the version with or without a leading v: v0.1.0 and 0.1.0 both name 0.1.0.
-          version=$(node -p "require('./package.json').version")
-          tagged="${RELEASE_TAG#v}"
-          if [ "$tagged" != "$version" ]; then
-            echo "Tag $RELEASE_TAG names version $tagged, but package.json says $version — bump package.json (pnpm version <x.y.z>) and tag again."
-            exit 1
-          fi
 
       - run: pnpm install --frozen-lockfile
 
@@ -87,7 +121,7 @@ jobs:
           wait-for-completion: true
           output-artifact-directory: signed
 
-      - name: Attach the installer to the release
+      - name: Attach the installer and publish the release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -99,3 +133,4 @@ jobs:
           else
             gh release upload "$RELEASE_TAG" src-tauri/target/release/bundle/nsis/*.exe --clobber
           fi
+          gh release edit "$RELEASE_TAG" --draft=false

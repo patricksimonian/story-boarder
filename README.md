@@ -39,30 +39,29 @@ pnpm test:rust        # shell tests
 
 Icon: edit `src-tauri/icons/source.png` (square), run `pnpm tauri icon src-tauri/icons/source.png`, then touch `src-tauri/build.rs` before building so the exe picks it up.
 
-### When the desktop app misbehaves
+### Releasing
 
-The page inside the window is the same app as the browser build, and it fails the same ways — but a release build has no console to read. Three places to look:
+```
+pnpm changeset fixed "The coach accepts a five-field run again."
+pnpm release:notes     # what the next release would say
+```
 
-- **Ctrl+Shift+I** opens the webview inspector in any build, release included. Uncaught errors and unhandled rejections show up on its console.
-- **The log file** at `%LOCALAPPDATA%\io.github.patricksimonian.storyline\logs\storyline.log` gets the same errors from the page, plus the shell's own, whether or not the inspector was open at the time.
-- **The sidebar** says when a commit couldn't be written (beside History) and why an export failed (under the export button). The checkpoint dialog keeps its reason too.
+To release, run the `release` workflow under Actions on `main` and type the version, `eg 0.2.0`.
 
-`pnpm desktop:smoke <story folder>` drives a real build end to end — opens a copy of the folder, waits for the opening commit, exports the playable HTML, commits a checkpoint — and fails on any console error the page raised along the way. It works on a copy under the temp directory and never touches the folder you name. `--debug` runs the debug build against `pnpm dev` instead. The Rust side has its own tests (`pnpm test:rust`), which drive every command through the real IPC path with no window.
 
-Version: `package.json` is the only place it lives (Tauri reads it from there; the page shows it). Bump with `pnpm version x.y.z`, then tag `vx.y.z` (or `x.y.z`; the workflow accepts either) — the workflow refuses a tag that names another version.
+## Coach Claude
 
-Release: publish a GitHub release and `.github/workflows/release.yml` builds and attaches the installer, signed through SignPath once the `SIGNPATH_*` repository variables and `SIGNPATH_API_TOKEN` secret exist. Run the workflow by hand with a tag to attach a build to an existing release.
+I wanted a feature that acted like your personal editor. Introducing Coach Claude. Coach Claude wires to your existing claude subscription by spawning a `claude -p` shell. If you are adverse to this, do not turn it on. Reasonable safe gaurds have been put in place to protect your environment from an unleashed claude LLM call, as well as to prevent inadvertant execution through the spawn. This feature is optional and disabled by default.
 
-## To activate coaching
-
-The coach runs through the Claude Code you have installed and signed into. Install Claude Code and sign in, then open Settings (the cog at the bottom of the navigation) and switch Coaching on. A health check runs there and on every open while it is on: Claude Code found, signed in, and answering through the model you pick. On the desktop, that is all. In a browser, run `pnpm assistant` at the project and leave it running first; the check says so if it is not. The prompts the reads and checks use are files under `coach/` in the story folder, editable in Settings or anywhere else.
-
-With it on, prose that names a character, place, lore page, note, scene, or variable lights up in every editor; hover a name for its page and where else it is named, or to rule on what a phrase means. A read, from the Read button or after each save if you switch that on, is an editor's pass over the page against the library, the notebook, and the scenes before it: it records what the page says about who is in it and what changes, and leaves notes — a clash with the world, a loose end, state the engine should track, anything the page treats as part of the story that has no page, scene, note, or variable yet. Those last are drawn in orange in the prose; the card on one creates the thing in a click, or says it is nothing. The Coach view keeps the log, and a continuity check walks a storyline through it and reports what cannot all be true, in Analysis. The mention pipeline works without Claude Code; the reads and checks need it.
+What does the coach do?
+- Reads entire scenes and story lines
+- Can be activated to read any form of prose content
+- Sanity checks your work:
+  - finds potential loopholes
+  - characters that are not defined
+  - missing variables
+  - potential issues with continuity
 
 ### Evals for the coach
 
-The reads are a model's judgement, so they are measured rather than assumed. `pnpm eval:coach` runs the real reads, through your own Claude Code, against the fixtures under `evals/` with stated expectations — the Warden has no page, "the raven king" is King Naviro — three times each, and reports a pass rate per expectation; an expectation passes at two of three. It spends your usage, so it never runs with `pnpm test`. `EVAL_RUNS`, `EVAL_MODEL`, and `EVAL_ONLY` narrow it; the last run's answers land in `evals/results/last-run.json`. When a read misses something on your own story, the fixture that reproduces it belongs there.
-
-## To Dos
-
-- nothing queued: the model coach of issue 11 (state worth tracking, structure) landed as the editor's notes in the read, and missing references land as orange names.
+The reads are a model's judgement. `pnpm eval:coach` runs the real reads, through your own Claude Code, against the fixtures under `evals/` with stated expectations. The evals are built around the above sanity checks that I had mentioned. I hope in future releases to expand the evals and to offer more customization to prevent excessive token usage. Running evals and the coach spends your usage
