@@ -1,7 +1,7 @@
 [package]
-name = "storyline"
+name = "story-boarder"
 version = "0.1.0"
-description = "Storyline: a local-first desktop app for writing a video game's story"
+description = "Story Boarder: a local-first desktop app for writing a video game's story"
 authors = ["Patrick Simonian"]
 license = "Apache-2.0"
 repository = "https://github.com/patricksimonian/story-boarder"

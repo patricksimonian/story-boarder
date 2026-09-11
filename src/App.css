@@ -2963,3 +2963,11 @@ button.sb-pen:focus-visible {
 .mention-picker-list button:hover {
   background: var(--shade);
 }
+.mention-picker-new {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}

@@ -74,7 +74,25 @@ const CASES: Case[] = [
       { name: 'does not define Teodor or Marrow Point (they have pages)', holds: (e) => !e.notes?.some((n) => n.kind === 'define' && !n.entity && /^(teodor|marrow point)$/i.test(n.name ?? '')) },
     ],
   },
+  {
+    name: 'The Oath: a yes/no the reader answers is state; a fact from the start is not',
+    folder: resolve(here, 'fixtures/salt-road'),
+    item: 'note:the-oath',
+    expectations: [
+      { name: 'proposes a variable for the answer to "can you keep a secret?"', holds: (e) => proposes(e, /keep\w*_?(the_|a_)?secret|secret_kept|promis|oath|answer/i) },
+      {
+        name: 'notes that both answers lead to the same line',
+        holds: (e) => e.notes?.some((n) => (n.kind === 'loose-end' || n.kind === 'other') && /secret|answer|choice|yes/i.test(`${n.message} ${n.quote ?? ''}`)) ?? false,
+      },
+      { name: 'does not propose a variable for Teodor never knowing his parents', holds: (e) => !proposes(e, /parent|father|mother|lineage|heritage|upbringing|(?<!bell.?)origin/i) },
+    ],
+  },
 ]
+
+/** A variable proposal whose id or name matches; the message is left out, since it quotes the page and would match on any word in it. */
+function proposes(e: LedgerEntry, about: RegExp): boolean {
+  return e.notes?.some((n) => n.kind === 'define' && n.defineAs === 'variable' && !!n.variable && about.test(`${n.variable.id} ${n.name ?? ''}`)) ?? false
+}
 
 /** A define note naming the thing, as that kind; the kind may be missing when the model did not say. */
 function defined(e: LedgerEntry, name: RegExp, as: string): boolean {

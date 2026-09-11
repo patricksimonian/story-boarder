@@ -130,7 +130,7 @@ mod tests {
 
     fn temp_root(tag: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
-            "storyline-folder-{tag}-{}-{}",
+            "story-boarder-folder-{tag}-{}-{}",
             std::process::id(),
             SWAP_COUNTER.fetch_add(1, Ordering::SeqCst)
         ));

@@ -8,6 +8,9 @@ import type { MentionKind, Span, Target } from './match'
  * what the phrase means. Built by the app per open item, since only
  * the app knows the story and which page the text belongs to.
  */
+/** What a mention card can create in place: the kinds with a page or an item of their own. */
+export type CreateKind = 'character' | 'place' | 'lore' | 'scene' | 'note'
+
 export interface MentionContext {
   find: (text: string) => Span[]
   describe: (key: TargetKey) => MentionCard | undefined
@@ -16,8 +19,13 @@ export interface MentionContext {
   onVerdict: (quote: string, entity: TargetKey | null) => void
   /** A story-folder image as something an <img> can show, or null when it cannot be read. */
   imageUrl?: (path: string) => Promise<string | null>
-  /** Makes the thing an orange name asks for — a page, a scene, a note — with that name. */
-  onCreate?: (kind: 'character' | 'place' | 'lore' | 'scene' | 'note', title: string) => void
+  /**
+   * Makes the thing a name asks for — a page, a scene, a note — with that
+   * name, and rules that the quoted phrase means it. Offered on an orange
+   * name and, through the picker, on a phrase the read connected to
+   * something the writer says it is not.
+   */
+  onCreate?: (kind: CreateKind, title: string, quote: string) => void
   /** What the read thought an orange name should be, when it said. */
   suggestedKind?: (quote: string) => string | undefined
   /** Every page, scene, note, and variable the story has, for "it is something that exists". */

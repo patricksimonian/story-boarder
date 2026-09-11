@@ -45,7 +45,7 @@ mod tests {
     #[test]
     fn remembers_newest_first_and_replaces_by_name() {
         let file = std::env::temp_dir()
-            .join(format!("storyline-recents-{}", std::process::id()))
+            .join(format!("story-boarder-recents-{}", std::process::id()))
             .join("recents.json");
         let _ = fs::remove_file(&file);
         assert!(load(&file).is_empty());

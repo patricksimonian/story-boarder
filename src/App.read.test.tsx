@@ -252,6 +252,32 @@ describe('the scene read', () => {
     })
   })
 
+  test("a phrase the read connected can be made into something new, and the writer's ruling points at it", async () => {
+    const world = embersWorld()
+    await world.files.writeText('scenes/the-dry-cistern.md', CISTERN)
+    const runner = readingRunner()
+    await openStory(world, runner)
+    const editor = await openCistern()
+    const read = await within(editor).findByRole('button', { name: 'Read' })
+    await waitFor(() => expect(read).toBeEnabled())
+    await userEvent.click(read)
+    await waitFor(() => expect(mentionsIn(editor)).toHaveLength(3))
+    await userEvent.hover(mentionsIn(editor).find((el) => el.textContent === 'The door-woman')!)
+    const tip = await screen.findByRole('dialog', { name: /mention: the door-woman/i })
+    await userEvent.click(within(tip).getByRole('button', { name: 'It is something else…' }))
+    await userEvent.click(within(within(tip).getByRole('group', { name: 'Or something new' })).getByRole('button', { name: 'Create character' }))
+    await waitFor(async () => expect(await world.files.exists('characters/the-door-woman.md')).toBe(true))
+    await waitFor(async () =>
+      expect(JSON.parse(await world.files.readText('mentions.json'))).toEqual({
+        'scene:the-dry-cistern': [{ quote: 'The door-woman', entity: 'character:the-door-woman', by: 'writer' }],
+      }),
+    )
+    await waitFor(() => expect(mentionsIn(editor).find((el) => el.textContent === 'The door-woman')?.className).toContain('mention-certain'))
+    await userEvent.hover(mentionsIn(editor).find((el) => el.textContent === 'The door-woman')!)
+    const after = await screen.findByRole('dialog', { name: /mention: the door-woman/i })
+    expect(within(after).getByRole('button', { name: 'Open character The door-woman' })).toBeInTheDocument()
+  })
+
   test('a session limit stops the whole-story pass at once, stands as a notice, and holds reads until dismissed', async () => {
     const world = embersWorld()
     await world.files.writeText('scenes/the-dry-cistern.md', CISTERN)

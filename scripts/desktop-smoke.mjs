@@ -29,7 +29,7 @@ if (!storyArg) {
 }
 
 const repo = resolve(import.meta.dirname, '..')
-const exe = join(repo, 'src-tauri', 'target', debug ? 'debug' : 'release', 'storyline.exe')
+const exe = join(repo, 'src-tauri', 'target', debug ? 'debug' : 'release', 'story-boarder.exe')
 if (!existsSync(exe)) {
   console.error(`No build at ${exe} — run ${debug ? 'cargo build --manifest-path src-tauri/Cargo.toml' : 'pnpm desktop:build'} first.`)
   process.exit(2)
@@ -101,7 +101,7 @@ const inPage = (body) => `(async () => { ${helpers}; ${body} })()`
 
 async function main() {
   const source = resolve(storyArg)
-  const work = mkdtempSync(join(tmpdir(), 'storyline-smoke-'))
+  const work = mkdtempSync(join(tmpdir(), 'story-boarder-smoke-'))
   const name = `smoke-${basename(source)}`
   const copy = join(work, name)
   cpSync(source, copy, { recursive: true, filter: (p) => basename(p) !== '.git' && basename(p) !== 'exports' })

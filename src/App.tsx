@@ -579,7 +579,7 @@ export default function App({
       describe: (key) => describeTarget(story, key, item, index, developmentLines(ledger, story, key, item), developmentsFor(ledger, story, key)),
       onOpen: (key) => void openTarget(key),
       onVerdict: (quote, entity) => void ruleOnMention(item, quote, entity),
-      onCreate: (kind, title) => void defineThing(kind, title),
+      onCreate: (kind, title, quote) => void defineAndRule(item, kind, title, quote),
       everything: () => [...dict.targets.values()].sort((a, b) => a.title.localeCompare(b.title)),
       onAlias: (key, alias) => void keepAsName(key, alias),
       suggestedKind: (quote) => ledger[item]?.notes?.find((n) => n.kind === 'define' && !n.entity && n.name && phraseKey(n.name) === phraseKey(quote))?.defineAs,
@@ -697,12 +697,24 @@ export default function App({
   }
 
   /** Creates the thing a define note or an orange name asks for, without leaving the page the writer is on. */
-  async function defineThing(kind: DefineKind, title: string): Promise<void> {
-    if (!folder || kind === 'variable') return
-    if (kind === 'scene') await createScene(folder.files, { title, storylines: [] })
-    else if (kind === 'note') await createNote(folder.files, title)
-    else await createReference(folder.files, kind, title)
+  async function defineThing(kind: DefineKind, title: string): Promise<TargetKey | undefined> {
+    if (!folder || kind === 'variable') return undefined
+    let id: Slug
+    if (kind === 'scene') id = await createScene(folder.files, { title, storylines: [] })
+    else if (kind === 'note') id = await createNote(folder.files, title)
+    else id = await createReference(folder.files, kind, title)
     await reload(folder)
+    return targetKey({ kind, id })
+  }
+
+  /**
+   * A mention card's "create": the thing is made with the phrase as its
+   * name, and the writer's ruling that the phrase means it is filed, so it
+   * outranks whatever the read had connected the phrase to.
+   */
+  async function defineAndRule(item: TargetKey, kind: DefineKind, title: string, quote: string): Promise<void> {
+    const key = await defineThing(kind, title)
+    if (key) await ruleOnMention(item, quote, key)
   }
 
   /** A proposed variable, declared through the ordinary registry save — as if typed in the Variables view. */
@@ -752,8 +764,9 @@ export default function App({
 
   /** The writer's ruling on a phrase lands in mentions.json; the editors redraw from the reload. */
   async function ruleOnMention(item: TargetKey, quote: string, entity: TargetKey | null): Promise<void> {
-    if (!folder || !loaded) return
-    const next = withVerdict(loaded.story.verdicts, item, { quote, entity, by: 'writer' })
+    const current = loadedRef.current
+    if (!folder || !current) return
+    const next = withVerdict(current.story.verdicts, item, { quote, entity, by: 'writer' })
     await folder.files.writeText(MENTIONS_PATH, serializeVerdicts(next))
     await reload(folder)
   }

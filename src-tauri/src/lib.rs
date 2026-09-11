@@ -310,14 +310,14 @@ fn configure<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Builder<R>
 
 /// The log goes to a file in the app's log directory in every build —
 /// on Windows, %LOCALAPPDATA%\io.github.patricksimonian.storyline\logs\
-/// storyline.log — and to the terminal as well in a debug build. One
+/// story-boarder.log — and to the terminal as well in a debug build. One
 /// file, capped, replaced when it fills.
 fn logging() -> tauri::plugin::TauriPlugin<tauri::Wry> {
     use tauri_plugin_log::{RotationStrategy, Target, TargetKind};
     let mut builder = tauri_plugin_log::Builder::default()
         .level(log::LevelFilter::Info)
         .clear_targets()
-        .target(Target::new(TargetKind::LogDir { file_name: Some("storyline".to_string()) }))
+        .target(Target::new(TargetKind::LogDir { file_name: Some("story-boarder".to_string()) }))
         .rotation_strategy(RotationStrategy::KeepOne)
         .max_file_size(2_000_000);
     if cfg!(debug_assertions) {
@@ -378,7 +378,7 @@ mod ipc {
         fn open(tag: &str) -> Shell {
             let app = configure(mock_builder()).build(mock_context(noop_assets())).unwrap();
             let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default()).build().unwrap();
-            let dir = std::env::temp_dir().join(format!("storyline-ipc-{tag}-{}", std::process::id()));
+            let dir = std::env::temp_dir().join(format!("story-boarder-ipc-{tag}-{}", std::process::id()));
             let _ = std::fs::remove_dir_all(&dir);
             std::fs::create_dir_all(&dir).unwrap();
             register(&app.state::<Roots>(), &dir);

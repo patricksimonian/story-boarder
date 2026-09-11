@@ -2,7 +2,7 @@ import { EditorContent, useEditor } from '@tiptap/react'
 import { useEffect, useRef, useState } from 'react'
 import type { TargetKey } from '../domain/types'
 import { proseExtensions, readProse } from '../editor/prose'
-import { KIND_LABEL, type MentionCard, type MentionContext } from '../mentions/context'
+import { KIND_LABEL, type CreateKind, type MentionCard, type MentionContext } from '../mentions/context'
 import { pageParagraphs } from '../mentions/describe'
 import type { Certainty, Target } from '../mentions/match'
 import { targetKey } from '../mentions/verdicts'
@@ -188,6 +188,15 @@ function CardImage({ path, load, large }: { path: string; load?: (path: string) 
   return <img className={`mention-image ${large ? 'large' : ''}`} src={url} alt={name} title={name} />
 }
 
+/** The kinds a card can create in place, in the order they are offered; the read's suggestion moves to the front. */
+const CREATE_KINDS: { kind: CreateKind; label: string }[] = [
+  { kind: 'character', label: 'character' },
+  { kind: 'place', label: 'place' },
+  { kind: 'lore', label: 'lore page' },
+  { kind: 'scene', label: 'scene' },
+  { kind: 'note', label: 'note' },
+]
+
 function MentionTip({
   tip,
   mentions,
@@ -209,6 +218,13 @@ function MentionTip({
   }
   const one = cards.length === 1 ? cards[0] : undefined
   const name = tip.quote.replace(/['’]s?$/, '')
+  const create = mentions.onCreate
+    ? (kind: CreateKind) => {
+        mentions.onCreate?.(kind, name, tip.quote)
+        onClose()
+      }
+    : undefined
+  // An orange name has its own create buttons above the picker; a connected phrase gets them inside it.
   const picker = mentions.everything && (
     <Picker
       everything={mentions.everything()}
@@ -217,18 +233,12 @@ function MentionTip({
         mentions.onAlias?.(key, name)
         onClose()
       }}
+      onCreate={tip.certainty === 'unknown' ? undefined : create}
     />
   )
   if (tip.certainty === 'unknown') {
     const suggested = mentions.suggestedKind?.(tip.quote)
-    const kinds: { kind: 'character' | 'place' | 'lore' | 'scene' | 'note'; label: string }[] = [
-      { kind: 'character', label: 'character' },
-      { kind: 'place', label: 'place' },
-      { kind: 'lore', label: 'lore page' },
-      { kind: 'scene', label: 'scene' },
-      { kind: 'note', label: 'note' },
-    ]
-    const ordered = [...kinds].sort((a, b) => (a.kind === suggested ? -1 : b.kind === suggested ? 1 : 0))
+    const ordered = [...CREATE_KINDS].sort((a, b) => (a.kind === suggested ? -1 : b.kind === suggested ? 1 : 0))
     return (
       <div className="mention-tip mention-tip-unknown" role="dialog" aria-label={`Mention: ${tip.quote}`} style={{ top: tip.top, left: tip.left }}>
         <p className="mention-ask">
@@ -240,10 +250,7 @@ function MentionTip({
               key={kind}
               type="button"
               className={kind === suggested ? 'suggested' : ''}
-              onClick={() => {
-                mentions.onCreate?.(kind, name)
-                onClose()
-              }}
+              onClick={() => create?.(kind)}
             >
               Create {label}
             </button>
@@ -366,8 +373,12 @@ function MentionTip({
   )
 }
 
-/** "It is something that exists": a search over everything the story has, choosing one thing. */
-function Picker({ everything, onPick }: { everything: Target[]; onPick: (key: TargetKey) => void }) {
+/**
+ * "It is something else": a search over everything the story has, choosing
+ * one thing — or, when nothing there is it, a new page, scene, or note with
+ * the phrase as its name.
+ */
+function Picker({ everything, onPick, onCreate }: { everything: Target[]; onPick: (key: TargetKey) => void; onCreate?: (kind: CreateKind) => void }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   if (!open) {
@@ -390,6 +401,16 @@ function Picker({ everything, onPick }: { everything: Target[]; onPick: (key: Ta
         ))}
         {hits.length === 0 && <span className="mention-empty">nothing by that name</span>}
       </span>
+      {onCreate && (
+        <span className="mention-picker-new" role="group" aria-label="Or something new">
+          <span className="mention-empty">Or something new:</span>
+          {CREATE_KINDS.map(({ kind, label }) => (
+            <button key={kind} type="button" onClick={() => onCreate(kind)}>
+              Create {label}
+            </button>
+          ))}
+        </span>
+      )}
     </span>
   )
 }

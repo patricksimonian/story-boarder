@@ -132,7 +132,7 @@ describe('mentions in the prose editor', () => {
     expect(buttons[0]).toBe('Create place')
     expect(buttons).toContain('Not a thing')
     await userEvent.click(within(tip).getByRole('button', { name: 'Create place' }))
-    expect(ctx.onCreate).toHaveBeenCalledWith('place', 'Kal’ewei')
+    expect(ctx.onCreate).toHaveBeenCalledWith('place', 'Kal’ewei', 'Kal’ewei')
 
     await userEvent.hover(mentionEls()[0])
     await screen.findByRole('dialog')
@@ -163,6 +163,33 @@ describe('mentions in the prose editor', () => {
     await userEvent.click(within(tip).getByRole('option', { name: /King Naviro/ }))
     expect(ctx.onVerdict).toHaveBeenCalledWith('the raven king', 'character:king-naviro')
     expect(ctx.onAlias).toHaveBeenCalledWith('character:king-naviro', 'the raven king')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  test('a phrase the read connected can be something new: the picker creates it with the phrase as its name', async () => {
+    const naviro = { kind: 'character' as const, id: 'king-naviro', title: 'King Naviro' }
+    const ctx = context({
+      find: (text) => {
+        const at = text.indexOf('Elias Tamril')
+        return at < 0 ? [] : [{ from: at, to: at + 12, quote: 'Elias Tamril', targets: [naviro], certainty: 'model' }]
+      },
+      describe: () => ({ ...rookCard, key: 'character:king-naviro', title: 'King Naviro' }),
+      everything: () => [naviro],
+      onAlias: vi.fn(),
+      onCreate: vi.fn(),
+    })
+    render(<ProseEditor markdown="Down came Elias Tamril." onChange={() => {}} mentions={ctx} />)
+    await waitFor(() => expect(mentionEls()).toHaveLength(1))
+    await userEvent.hover(mentionEls()[0])
+    const tip = await screen.findByRole('dialog', { name: /mention: elias tamril/i })
+    expect(tip).toHaveTextContent('The read took Elias Tamril to mean King Naviro.')
+    await userEvent.click(within(tip).getByRole('button', { name: 'It is something else…' }))
+    const fresh = within(tip).getByRole('group', { name: 'Or something new' })
+    expect(within(fresh).getAllByRole('button').map((b) => b.textContent)).toEqual(['Create character', 'Create place', 'Create lore page', 'Create scene', 'Create note'])
+    await userEvent.click(within(fresh).getByRole('button', { name: 'Create character' }))
+    expect(ctx.onCreate).toHaveBeenCalledWith('character', 'Elias Tamril', 'Elias Tamril')
+    expect(ctx.onVerdict).not.toHaveBeenCalled()
+    expect(ctx.onAlias).not.toHaveBeenCalled()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
