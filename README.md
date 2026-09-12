@@ -80,10 +80,10 @@ What does the coach do?
 
 Here it is in action
 
-<img src="./docs/assets/coach-1.png" width="350"/>
-<img src="./docs/assets/coach-2.png" width="350"/>
-<img src="./docs/assets/coach-3.png" width="350"/>
-<img src="./docs/assets/coach-4.png" width="350"/>
+<img src="./docs/assets/coach-1.png" width="450"/>
+<img src="./docs/assets/coach-2.png" width="450"/>
+<img src="./docs/assets/coach-3.png" width="450"/>
+<img src="./docs/assets/coach-4.png" width="450"/>
 
 ### Evals for the coach
 
