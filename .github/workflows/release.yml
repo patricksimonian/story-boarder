@@ -5,9 +5,15 @@
 # .changeset/ into CHANGELOG.md and the release notes, commits, tags
 # vX.Y.Z, pushes both, and opens a draft release carrying the notes. The
 # second, on Windows, checks out the tag, tests, builds the installer,
-# signs it when a SignPath project is configured, attaches it, and
-# publishes the release. A failed build leaves the draft and the tag in
-# place; "Re-run failed jobs" picks up from the tag.
+# signs it when a SignPath project is configured, writes its SHA-256 to
+# SHA256SUMS.txt, has GitHub attest that this workflow built it, attaches
+# installer and sums, and publishes the release. A failed build leaves
+# the draft and the tag in place; "Re-run failed jobs" picks up from the
+# tag.
+#
+# A download is checked against the sums file, or against the
+# attestation with `gh attestation verify <file> --repo <owner>/<repo>`,
+# which proves the file came out of this workflow on this repository.
 #
 # Signing is opt-in through repository variables so the workflow runs
 # unsigned until the SignPath Foundation application is approved:
@@ -26,6 +32,8 @@ on:
 permissions:
   contents: write
   actions: read
+  id-token: write
+  attestations: write
 
 jobs:
   cut:
@@ -121,16 +129,34 @@ jobs:
           wait-for-completion: true
           output-artifact-directory: signed
 
-      - name: Attach the installer and publish the release
+      - name: Gather the installer and write its checksum
+        shell: bash
+        run: |
+          mkdir release
+          if [ -d signed ]; then
+            cp signed/*.exe release/
+          else
+            cp src-tauri/target/release/bundle/nsis/*.exe release/
+          fi
+          # The product name has a space in it, and GitHub turns that into a dot
+          # when the asset is uploaded. Name the file that way now, so the sums
+          # file names what people actually download.
+          for f in release/*.exe; do
+            mv "$f" "release/$(basename "$f" | tr ' ' '.')"
+          done
+          cd release
+          sha256sum *.exe > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Attest that this workflow built the installer
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: release/*.exe
+
+      - name: Attach the installer and its checksum, and publish the release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # The product name has a space in it, so the installer's name does too:
-          # let the shell expand the glob straight into the arguments.
-          if [ -d signed ]; then
-            gh release upload "$RELEASE_TAG" signed/*.exe --clobber
-          else
-            gh release upload "$RELEASE_TAG" src-tauri/target/release/bundle/nsis/*.exe --clobber
-          fi
+          gh release upload "$RELEASE_TAG" release/* --clobber
           gh release edit "$RELEASE_TAG" --draft=false
