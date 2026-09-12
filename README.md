@@ -14,14 +14,13 @@ DevOps, Software Development, to me, is a creative process. There are always pro
 
 I do not have a publishing/code-signing key for this package and so you will face the unknown installer warning.
 
-What I can give you is a way to check that what you downloaded is what the release workflow built. Every release has a `SHA256SUMS.txt` next to the installer. Hash your download and compare:
+Every release has a `SHA256SUMS.txt` next to the installer. Hash your download and compare:
 
 ```
 certutil -hashfile "Story.Boarder_<version>_x64-setup.exe" SHA256
 ```
 
-The workflow also has GitHub attest the build. If you have the GitHub CLI, this proves the file came out of this repo's release workflow and nowhere else:
-
+The workflow also has GitHub attest the build. If you have the GitHub CLI
 ```
 gh attestation verify "Story.Boarder_<version>_x64-setup.exe" --repo patricksimonian/story-boarder
 ```
