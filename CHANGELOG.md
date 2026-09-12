@@ -2,6 +2,12 @@
 
 Newest first. Written by the release workflow from the changesets under `.changeset/`.
 
+## 0.1.7 (2026-09-12)
+
+### Added
+
+- Each release now carries a SHA256SUMS.txt beside the installer, and GitHub records that the release workflow built it. A download can be checked before it's run.
+
 ## 0.1.6 (2026-09-11)
 
 ### Changed
