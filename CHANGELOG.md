@@ -2,6 +2,17 @@
 
 Newest first. Written by the release workflow from the changesets under `.changeset/`.
 
+## 0.1.6 (2026-09-11)
+
+### Changed
+
+- A yes/no the reader answers is state, so the read proposes a variable for it now, and says so when both answers lead to the same place. It also stops proposing variables for facts a page merely states, like who someone has always been.
+- The desktop program is story-boarder.exe now, and its log file is story-boarder.log. Both used to carry the old name.
+
+### Fixed
+
+- "It is something else…" on a mention card only let you search for a page that already existed. Now you can create one from there too, named for the phrase, and the read's earlier guess gives way to it.
+
 ## 0.1.5 (2026-09-11)
 
 ### Added
