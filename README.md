@@ -87,3 +87,11 @@ Here it is in action
 ### Evals for the coach
 
 The reads are a model's judgement. `pnpm eval:coach` runs the real reads, through your own Claude Code, against the fixtures under `evals/` with stated expectations. The evals are built around the above sanity checks that I had mentioned. I hope in future releases to expand the evals and to offer more customization to prevent excessive token usage. Running evals and the coach spends your usage
+
+## To Dos
+
+- add a way for users to upload a state connector like drop box, gdrive
+  - a user can sync there story to a remote location and pull it down later
+  - they can pull down to an another installation of the application
+  - a user should be able to see if their current version of the story is out of date (behind) the remote location
+  - a git like change log is needed to manage changes in the story so that a user can receover previous work if lost, go back to an old commit and restart etc. Possibly this could be managed by a sqllite installation and uploading that file into the remote location as well. 
