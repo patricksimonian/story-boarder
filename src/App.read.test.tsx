@@ -82,12 +82,24 @@ function readingRunner(): StubProcessRunner {
               message: 'Whether Mara has stopped keeping watch is state a later scene will want.',
               quote: 'The door-woman stopped watching it.',
               variable: { id: 'mara_off_guard', type: 'boolean', initial: 'false', description: 'Mara has let her guard down.' },
+              effect: 'mara_off_guard = true',
+            },
+          ]
+        : []
+    const engine_in_prose =
+      item === 'scene:the-dry-cistern'
+        ? [
+            {
+              what: 'choice',
+              message: 'The prose offers two options that raise or lower a trust variable; the scene has no choices.',
+              quote: 'Option 1: she waits',
+              suggestion: 'Put the two options on the scene as choices, each with its effect.',
             },
           ]
         : []
     const notes = item === 'scene:the-dry-cistern' ? [{ kind: 'loose-end', message: 'Why she watches doors is raised and not answered.', quote: 'out of habit' }] : []
     const rejected = item === 'scene:the-dry-cistern' ? [{ quote: 'Maara', candidate: 'character:mara', why: 'a different word here' }] : []
-    return { synonyms, untracked_entities, untracked_variables, developments, rejected, notes }
+    return { synonyms, untracked_entities, untracked_variables, engine_in_prose, developments, rejected, notes }
   })
   return runner
 }
@@ -127,17 +139,20 @@ describe('the scene read', () => {
 
     // The scene says what the read found, right under the button: the notes with their fixes, then the developments.
     const outcome = within(editor).getByRole('region', { name: 'Last read' })
-    expect(outcome).toHaveTextContent('Read just now: 3 editor’s notes, 2 things to define, 1 development, 1 phrase resolved')
+    expect(outcome).toHaveTextContent('Read just now: 4 editor’s notes, 2 things to define, 1 development, 1 phrase resolved')
     expect(within(outcome).queryByRole('list', { name: 'Names ruled out' })).not.toBeInTheDocument()
     expect(outcome).toHaveTextContent('Mara Mara stops watching the door.')
     // The notes are folded until opened; the fold names how many there are.
     const fold = within(outcome).getByText(/^Editor’s notes/)
-    expect(fold).toHaveTextContent('Editor’s notes (3)')
+    expect(fold).toHaveTextContent('Editor’s notes (4)')
     expect(fold.closest('details')?.open).toBe(false)
     await userEvent.click(fold)
     await waitFor(() => expect(fold.closest('details')?.open).toBe(true))
     expect(outcome).toHaveTextContent('Why she watches doors is raised and not answered.')
     expect(outcome).toHaveTextContent('the cistern: mentioned, but no place page describes it.')
+    // A variable is state, not a mention: its headline is the state, then the message. Engine logic in the prose is named as such.
+    expect(outcome).toHaveTextContent('mara_off_guard: Whether Mara has stopped keeping watch is state a later scene will want.')
+    expect(outcome).toHaveTextContent('Engine in proseThe prose offers two options that raise or lower a trust variable; the scene has no choices.')
     expect(within(outcome).getByRole('button', { name: 'Create a place for the cistern' })).toBeInTheDocument()
 
     // A thing the read said is missing is drawn in orange; its card creates the page in one click.
@@ -154,7 +169,7 @@ describe('the scene read', () => {
     // The note turns green and links to the page; the fold stays open through the reload.
     const after = () => within(editor).getByRole('region', { name: 'Last read' })
     await waitFor(() => expect(after()).toHaveTextContent('the cistern: a place page describes it now.'))
-    expect(within(after()).getByText(/^Editor’s notes/)).toHaveTextContent('Editor’s notes (3, 1 done)')
+    expect(within(after()).getByText(/^Editor’s notes/)).toHaveTextContent('Editor’s notes (4, 1 done)')
     expect(within(after()).getByText(/^Editor’s notes/).closest('details')?.open).toBe(true)
     expect(within(after()).queryByRole('button', { name: 'Create a place for the cistern' })).not.toBeInTheDocument()
     expect(within(after()).getByRole('button', { name: 'the cistern ↗' })).toBeInTheDocument()

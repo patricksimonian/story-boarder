@@ -32,6 +32,7 @@ const KIND_LABEL: Record<EditorNote['kind'], string> = {
   continuity: 'Continuity',
   'loose-end': 'Loose end',
   define: 'Undefined',
+  engine: 'Engine in prose',
   other: 'Note',
 }
 
@@ -44,11 +45,12 @@ const NOUN: Record<NonNullable<EditorNote['defineAs']>, string> = {
   variable: 'variable',
 }
 
-/** What is the case, in one shape: the thing, and what does not describe it. */
+/** What is the case, in one shape: the thing, and what does not describe it. A variable is state, not a mention: its headline is the state in the writer's words, and the message says what no variable tracks. */
 function defineHeadline(note: ReadNote): string | null {
   if (note.kind !== 'define') return null
   if (note.entity) return `${note.entityTitle ?? note.entity} is on this page but not listed on the scene.`
   if (!note.name) return null
+  if (note.defineAs === 'variable') return `${note.name}:`
   const noun = note.defineAs ? NOUN[note.defineAs] : 'page, scene, note, or variable'
   return `${note.name}: mentioned, but no ${noun} describes it.`
 }

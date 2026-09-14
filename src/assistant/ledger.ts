@@ -36,10 +36,14 @@ export type DefineKind = 'character' | 'place' | 'lore' | 'scene' | 'note' | 'va
  * sometimes with a fix the app can apply. A `define` note is the one
  * that catches what does not exist yet: anything the read judges the
  * story should hold as a first-class thing — a page, a scene, a note,
- * a variable — named as written, with the kind it should be.
+ * a variable — named as written, with the kind it should be. An
+ * `engine` note is a choice, an effect, or a condition the writer wrote
+ * out in the prose instead of putting it on the scene; when it proposes
+ * the variable the prose names, it carries the proposal like a define
+ * note does.
  */
 export interface EditorNote {
-  kind: 'continuity' | 'loose-end' | 'define' | 'other'
+  kind: 'continuity' | 'loose-end' | 'define' | 'engine' | 'other'
   message: string
   quote: string
   /** What the writer could do about it, one sentence starting with a verb. */

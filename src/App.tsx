@@ -607,7 +607,7 @@ export default function App({
     const notes: ReadNote[] = (entry.notes ?? []).map((note) => {
       const shown: ReadNote = { ...note }
       if (note.entity) shown.entityTitle = dict?.targets.get(note.entity)?.title
-      if (note.kind === 'define') {
+      if (note.kind === 'define' || note.kind === 'engine') {
         const done = defineDone(note, scene)
         if (done) shown.done = done
         else shown.action = defineAction(note, scene) ?? undefined

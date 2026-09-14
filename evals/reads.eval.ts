@@ -87,11 +87,22 @@ const CASES: Case[] = [
       { name: 'does not propose a variable for Teodor never knowing his parents', holds: (e) => !proposes(e, /parent|father|mother|lineage|heritage|upbringing|(?<!bell.?)origin/i) },
     ],
   },
+  {
+    name: 'The Gull: a choice with effects written in the prose is engine logic; being tired is not a variable; an unreached beat is not continuity',
+    folder: resolve(here, 'fixtures/salt-road'),
+    item: 'scene:the-gull',
+    expectations: [
+      { name: 'flags the two options as a choice written in the prose', holds: (e) => e.notes?.some((n) => n.kind === 'engine' && /option|choice|choos|pick/i.test(`${n.message} ${n.quote}`)) ?? false },
+      { name: "proposes a variable for the gull's trust", holds: (e) => proposes(e, /gull/i) },
+      { name: 'does not propose a variable for Teodor being tired', holds: (e) => !proposes(e, /tired|fatigue|weary|exhaust|sleep|rest|mood|energy/i) },
+      { name: 'does not file the unreached harbourmaster beat as continuity', holds: (e) => !e.notes?.some((n) => n.kind === 'continuity' && /harbourmaster|mooring|beat|synopsis/i.test(`${n.message} ${n.against?.quote ?? ''}`)) },
+    ],
+  },
 ]
 
-/** A variable proposal whose id or name matches; the message is left out, since it quotes the page and would match on any word in it. */
+/** A variable proposal, on a define note or an engine note, whose id or name matches; the message is left out, since it quotes the page and would match on any word in it. */
 function proposes(e: LedgerEntry, about: RegExp): boolean {
-  return e.notes?.some((n) => n.kind === 'define' && n.defineAs === 'variable' && !!n.variable && about.test(`${n.variable.id} ${n.name ?? ''}`)) ?? false
+  return e.notes?.some((n) => (n.kind === 'define' || n.kind === 'engine') && n.defineAs === 'variable' && !!n.variable && about.test(`${n.variable.id} ${n.name ?? ''}`)) ?? false
 }
 
 /** A define note naming the thing, as that kind; the kind may be missing when the model did not say. */

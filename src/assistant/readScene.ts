@@ -14,14 +14,16 @@ import type { JsonSchema, WorkflowRequest } from './claudeCode'
  * words), untracked entities (what the page treats as part of the story
  * that nothing describes yet), untracked variables (state the page
  * changes or assumes that the registry does not track), developments
- * (what the page says about each named thing), and the editor's notes
+ * (what the page says about each named thing), engine in prose (a
+ * choice, an effect, or a condition the writer wrote out in the prose
+ * instead of putting it on the scene), and the editor's notes
  * (continuity, loose ends). Underneath, the ledger keeps the same shape
  * it always did.
  */
 
 export const READ_SCENE = 'read-scene'
 
-export const NOTE_KINDS = ['continuity', 'loose-end', 'define', 'other'] as const
+export const NOTE_KINDS = ['continuity', 'loose-end', 'define', 'engine', 'other'] as const
 export type NoteKind = (typeof NOTE_KINDS)[number]
 export const DEFINE_KINDS = ['character', 'place', 'lore', 'scene', 'note', 'variable'] as const
 /** The kinds an untracked entity can be: a page, a scene, or a note. A variable is its own job. */
@@ -50,6 +52,15 @@ export interface ReadSceneOutput {
     effect?: string
     condition?: string
     suggestion?: string
+  }[]
+  /** A choice, an effect, or a condition the prose writes out that the scene's engine does not carry. */
+  engine_in_prose?: {
+    what: string
+    message: string
+    quote: string
+    suggestion?: string
+    variable?: { id: string; type: string; initial: string; description: string }
+    effect?: string
   }[]
   /** Library characters in a scene's prose that its characters field does not list, by key. */
   unlisted_characters?: string[]
@@ -129,6 +140,24 @@ export const READ_SCENE_SCHEMA: JsonSchema = {
         additionalProperties: false,
       },
     },
+    engine_in_prose: {
+      type: 'array',
+      description:
+        'A choice, an effect, or a condition the writer wrote out in the prose instead of putting it on the scene: "Option 1 / Option 2", "the player picks", "+= to the raven\'s variable", "if she has the bell". Only where the scene\'s engine does not already carry it.',
+      items: {
+        type: 'object',
+        properties: {
+          what: { type: 'string', enum: ['choice', 'effect', 'condition'] },
+          message: { type: 'string', description: "one sentence: what the prose writes out, in the engine's terms, and that the scene does not carry it" },
+          quote: { type: 'string', description: 'the line on this page it rests on, verbatim' },
+          suggestion: { type: 'string', description: 'where it belongs, one sentence starting with a verb: "Put the two options on the scene as choices…"' },
+          variable: VARIABLE_SHAPE,
+          effect: { type: 'string', description: 'the effect as the engine reads it, e.g. "raven_trust += 1"' },
+        },
+        required: ['what', 'message', 'quote'],
+        additionalProperties: false,
+      },
+    },
     unlisted_characters: {
       type: 'array',
       description: "On a scene only: keys of library characters who are in the scene's prose but not in its characters field.",
@@ -177,7 +206,7 @@ export const READ_SCENE_SCHEMA: JsonSchema = {
       },
     },
   },
-  required: ['synonyms', 'untracked_entities', 'untracked_variables', 'developments', 'rejected', 'notes'],
+  required: ['synonyms', 'untracked_entities', 'untracked_variables', 'engine_in_prose', 'developments', 'rejected', 'notes'],
   additionalProperties: false,
 }
 
@@ -187,7 +216,9 @@ synonyms: every phrase on this page that names something the story already has, 
 
 untracked_entities: anything this page treats as part of the story that no page, scene, or note describes yet. Check the list of what the story has first: a thing that has a page is never untracked, whatever the page is called. A person, a place, a region, a faction, a relic, a rite, a piece of history or world-building that a reader would expect to look up: name it as written, with kind character, place, or lore. An event this page tells or assumes that ought to be a scene of its own: kind scene. A body of world-building or backstory that deserves a note of its own: kind note. Judge by what the story would need, never by capital letters: "the swamp" and "port town" are places if the story keeps returning to them. The message states what is the case: "The Rite of Brine is mentioned, but no lore page describes it." Never write that a thing wants, needs, deserves, or should have a page; a story has no wishes. When the briefing shows the scenes and notes that name this page, read them for this page's subject too. When it lists things other reads already said the story lacks, connect them rather than flagging them fresh.
 
-untracked_variables: state this page changes or assumes that a later scene would test, and no variable in the registry tracks. Who has a thing now, where someone is, what someone knows, whether a way is open or closed, whether someone lives, whether a thing has happened. An object the page hands over is an entity; that someone now holds it is state, and state is this job. Go through the registry in the briefing and ask what this page changes or relies on that is not on it; the plainest case is a scene whose engine has no effects while its prose changes something a later scene would test. A choice this page puts to the reader is state as well: what they answered is what a later scene would test, whether or not this page goes on to use it — a page that asks "can you keep a secret?" and offers yes and no proposes the variable for the answer, girl_keeps_secret, even when both answers lead to the same line. A fact that holds from the story's start and that this page only states — who someone is, what they have always lacked or never known — is a development, and the page about them is where it lives; propose a variable only where this page is the one that changes the fact, or the one that would have to test it. For each, propose the variable (id in snake_case, type boolean, number, or enum, its initial value, a one-line description in the writer's words) and the effect this page performs as an expression the engine reads ("girl_has_bell = true"), or the condition it assumes. The message states what is the case: "This scene gives the girl the tide bell, and no variable tracks who holds it." Never propose a variable the registry already has, and never one for a thing this page merely names.
+untracked_variables: state this page changes or assumes that a later scene would test, and no variable in the registry tracks. Who has a thing now, where someone is, what someone knows, whether a way is open or closed, whether someone lives, whether a thing has happened. An object the page hands over is an entity; that someone now holds it is state, and state is this job. Go through the registry in the briefing and ask what this page changes or relies on that is not on it; the plainest case is a scene whose engine has no effects while its prose changes something a later scene would test. A choice this page puts to the reader is state as well: what they answered is what a later scene would test, whether or not this page goes on to use it — a page that asks "can you keep a secret?" and offers yes and no proposes the variable for the answer, girl_keeps_secret, even when both answers lead to the same line. A fact that holds from the story's start and that this page only states — who someone is, what they have always lacked or never known — is a development, and the page about them is where it lives; propose a variable only where this page is the one that changes the fact, or the one that would have to test it. A feeling, a mood, a wish, a memory, a trait — that someone is tired, misses someone, is afraid, grows wearier by the day — is a development, however long the page dwells on it, unless the story plainly branches on it. Ask of every proposal which later scene would test it and with what condition; one you cannot answer that for is not a variable. A fact you file under developments is not also a variable unless this page is the one that changes it. For each, propose the variable (id in snake_case, type boolean, number, or enum, its initial value, a one-line description in the writer's words) and the effect this page performs as an expression the engine reads ("girl_has_bell = true"), or the condition it assumes; a proposal with neither is dropped. The message states what is the case: "This scene gives the girl the tide bell, and no variable tracks who holds it." Never propose a variable the registry already has, and never one for a thing this page merely names.
+
+engine_in_prose: a choice, an effect, or a condition the writer wrote out in the prose instead of putting it on the scene. The briefing gives the scene's engine as the writer has it. When the prose offers the reader options ("Option 1", "the player picks", "yes/no"), writes a change to a variable ("+= to the raven's variable", "-1 trust"), or gates a line on state ("if she has the bell"), and the engine carries no such choice, effect, or condition, say so in the engine's terms: this is a choice, an effect, a condition. The message states what is the case: "The prose offers two options that raise or lower a raven variable; the scene has no choices, and no variable tracks the raven." The suggestion says where it belongs: the options on the scene as choices, each with its effect; a variable declared for what the effect changes; a condition on the scene or the choice. Quote the line. Where the prose names a variable the registry lacks, propose it here, with the effect as the engine reads it, and do not propose it again under untracked_variables.
 
 unlisted_characters: on a scene only, the keys of library characters who are in the scene's prose but not in its characters field. Never on a note or a library page.
 
@@ -195,7 +226,7 @@ developments: facts this page asserts or changes about a named thing in the stor
 
 rejected: a name the briefing lists as already matched that does not mean that thing here — a common word that happens to be a title, a name used about the writing rather than in the story, a misspelling that is a different word.
 
-notes: the editor's notes. Every note is one full sentence stating what is the case on this page — never a title, a topic, or a phrase like "the Keepers' burden" — with the sentence on this page it rests on quoted verbatim, and a suggestion saying what the writer could do about it, starting with a verb: "Decide whether…", "Add a line where…", "Check the Keepers page against…". A continuity note sets this page against the world the library pages and notes lay down, or against what the scenes before it developed; it names both ends, and against carries the other end — the key of that page or scene as the briefing gives it, and its sentence, verbatim. A continuity note without against is dropped. A change over time is not a contradiction; a flat clash is. A page in the library is a reference a scene may reveal to be belief rather than fact; say so only when the clash has no such reading. A loose-end note is a thing this page sets up, promises, or raises that nothing before it accounts for and that a reader would carry forward; say what is set up and what is left open, and where or how it could be paid off. A choice this page offers whose answers all lead to the same place, with nothing recording the answer, is a loose end of this kind: say so, and whether a variable or a cut would settle it. Other: anything an editor would flag that fits neither.
+notes: the editor's notes. Every note is one full sentence stating what is the case on this page — never a title, a topic, or a phrase like "the Keepers' burden" — with the sentence on this page it rests on quoted verbatim, and a suggestion saying what the writer could do about it, starting with a verb: "Decide whether…", "Add a line where…", "Check the Keepers page against…". A continuity note sets this page against the world the library pages and notes lay down, or against what the scenes before it developed; it names both ends, and against carries the other end — the key of that page or scene as the briefing gives it, and its sentence, verbatim. A continuity note without against is dropped. The other end is always another page or scene, never this one: this scene's synopsis and beats are its plan, and prose that stops before a beat, or reaches it another way, is a draft in progress, not a clash — if it is worth saying at all, say it once, as other. A change over time is not a contradiction; a flat clash is. A page in the library is a reference a scene may reveal to be belief rather than fact; say so only when the clash has no such reading. A loose-end note is a thing this page sets up, promises, or raises that nothing before it accounts for and that a reader would carry forward; say what is set up and what is left open, and where or how it could be paid off. A choice this page offers whose answers all lead to the same place, with nothing recording the answer, is a loose end of this kind: say so, and whether a variable or a cut would settle it. Other: anything an editor would flag that fits neither.
 
 Restraint is the rule for the notes: a handful at most, each one you would stand behind, none you cannot quote. A page that is fine gets no notes. Name every thing by its key from the list of what the story has, exactly as given (kind:id). Answer with the JSON the schema asks for and nothing else.`
 
@@ -378,12 +409,32 @@ export function readSceneRequest(story: Story, item: TargetKey, dict: Dictionary
   return { workflow: READ_SCENE, system: `${rubric.trim()}\n\n${GLOSSARY}`, briefing, schema: READ_SCENE_SCHEMA }
 }
 
+/** A name with only its letters and digits left, so "Eel town", "Eel-town" and "Eeltown" are one name. */
+const squash = (s: string) => s.toLowerCase().replace(/^(the|a|an)\s+/, '').replace(/[^\p{L}\p{N}]+/gu, '')
+
+/**
+ * Whether the story already has a page, scene, or note by this name: the
+ * matcher finds it, or its letters are a page's title or id, or the text
+ * around it names the page by key ("place:eel-town is in the library").
+ */
+function storyHas(name: string, text: string, dict: Dictionary): boolean {
+  if (findMentions(name, dict).some((span) => span.certainty === 'certain' && span.targets.length > 0)) return true
+  const wanted = squash(name)
+  for (const [key, target] of dict.targets) {
+    if (target.kind === 'variable') continue
+    if (wanted && (squash(target.title) === wanted || squash(target.id) === wanted)) return true
+    if (text.includes(key)) return true
+  }
+  return false
+}
+
 /**
  * The read as the ledger keeps it: keys the story does not have are
  * dropped, empty strings are dropped, and the entry carries the hash of
  * the text it was read from. Synonyms become mentions; untracked
- * entities and unlisted characters become define notes; the notes keep
- * their kinds. The ledger's shape does not change with the answer's.
+ * entities and unlisted characters become define notes; engine in prose
+ * becomes engine notes; the notes keep their kinds. The ledger's shape
+ * does not change with the answer's.
  */
 export function ledgerEntryFrom(output: ReadSceneOutput, text: string, dict: Dictionary, now: number = Date.now(), item?: TargetKey): LedgerEntry {
   const isScene = item === undefined || item.startsWith('scene:')
@@ -406,9 +457,10 @@ export function ledgerEntryFrom(output: ReadSceneOutput, text: string, dict: Dic
     const defineAs = kind as EditorNote['defineAs']
     if (defineAs !== 'variable') {
       // A "missing" claim about a name the story already has is the read's
-      // error, not a gap: the Keepers page is called The Keepers.
-      const claimed = findMentions(name, dict).some((span) => span.certainty === 'certain' && span.targets.length > 0)
-      if (claimed) continue
+      // error, not a gap: the Keepers page is called The Keepers, "Eel town"
+      // is the page Eeltown, and a note that names the page by its key has
+      // found it already.
+      if (storyHas(name, `${clean(raw.message)} ${clean(raw.suggestion)}`, dict)) continue
     } else if (dict.targets.has(`variable:${name}`)) continue
     const note: EditorNote = { kind: 'define', message: clean(raw.message) || `${name} is mentioned, but nothing in the story describes it.`, quote: clean(raw.quote), name, defineAs }
     if (clean(raw.suggestion)) note.suggestion = clean(raw.suggestion)
@@ -418,13 +470,36 @@ export function ledgerEntryFrom(output: ReadSceneOutput, text: string, dict: Dic
     notes.push(note)
   }
 
-  // A variable proposal with no usable proposal, or for state the registry
-  // already tracks, is nothing the writer can act on.
+  // Engine logic the prose writes out: a choice, an effect, a condition
+  // the scene does not carry. The note says so; a variable it proposes
+  // gets the same Declare button a define note does.
+  const proposed = new Set<string>()
+  for (const raw of output.engine_in_prose ?? []) {
+    const message = clean(raw.message)
+    if (!['choice', 'effect', 'condition'].includes(clean(raw.what)) || message.split(/\s+/).length < 5) continue
+    const note: EditorNote = { kind: 'engine', message, quote: clean(raw.quote) }
+    if (clean(raw.suggestion)) note.suggestion = clean(raw.suggestion)
+    const variable = proposal(raw.variable)
+    if (variable && !dict.targets.has(`variable:${variable.id}`) && !proposed.has(variable.id)) {
+      proposed.add(variable.id)
+      note.name = variable.description.replace(/[.!?]+$/, '') || variable.id
+      note.defineAs = 'variable'
+      note.variable = variable
+    }
+    if (clean(raw.effect)) note.effect = clean(raw.effect)
+    notes.push(note)
+  }
+
+  // A variable proposal with no usable proposal, for state the registry
+  // already tracks, or with neither an effect nor a condition — nothing
+  // the engine would write or test — is nothing the writer can act on.
   for (const raw of output.untracked_variables ?? []) {
     const name = clean(raw.name)
     const variable = proposal(raw.variable)
     if (!name || !variable) continue
-    if (dict.targets.has(`variable:${variable.id}`) || dict.targets.has(`variable:${name}`)) continue
+    if (dict.targets.has(`variable:${variable.id}`) || dict.targets.has(`variable:${name}`) || proposed.has(variable.id)) continue
+    if (!clean(raw.effect) && !clean(raw.condition)) continue
+    proposed.add(variable.id)
     const note: EditorNote = {
       kind: 'define',
       message: clean(raw.message) || `${name} is state this page changes, and no variable tracks it.`,
@@ -460,7 +535,12 @@ export function ledgerEntryFrom(output: ReadSceneOutput, text: string, dict: Dic
     if (raw.against && clean(raw.against.where) && clean(raw.against.quote)) {
       note.against = { where: clean(raw.against.where), quote: clean(raw.against.quote) }
     }
-    if (kind === 'continuity' && !note.against) continue
+    // A clash between this page and its own synopsis or beats is a draft in progress, not continuity.
+    if (kind === 'continuity' && item && note.against && (note.against.where === item || note.against.where.startsWith(`${item} `) || note.against.where.startsWith(`${item}:`))) {
+      note.kind = 'other'
+      delete note.against
+    }
+    if (note.kind === 'continuity' && !note.against) continue
     notes.push(note)
   }
 

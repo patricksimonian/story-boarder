@@ -2829,6 +2829,9 @@ button.sb-pen:focus-visible {
 .read-note.define .read-kind {
   color: #e0862b;
 }
+.read-note.engine .read-kind {
+  color: #3a6ea5;
+}
 .read-note.done {
   border-top-style: solid;
   border-left: 3px solid #3a7d44;

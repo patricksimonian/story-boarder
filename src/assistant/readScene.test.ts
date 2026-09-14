@@ -187,6 +187,106 @@ describe('what the read leaves in the ledger', () => {
     })
   })
 
+  test('engine logic written in the prose becomes an engine note, with the variable it names proposed once', async () => {
+    const s = await story()
+    const dict = dictionary(s)
+    const blank = { synonyms: [], untracked_entities: [], developments: [], rejected: [], notes: [] }
+    const entry = ledgerEntryFrom(
+      {
+        ...blank,
+        engine_in_prose: [
+          {
+            what: 'choice',
+            message: 'The prose offers two options that raise or lower a raven variable; the scene has no choices, and no variable tracks the raven.',
+            quote: 'Option 1: "Don’t sass me!" -= to ravens variable',
+            suggestion: 'Put the two options on the scene as choices, each with its effect, and declare raven_trust.',
+            variable: { id: 'raven_trust', type: 'number', initial: '0', description: 'How far the raven trusts Dalia.' },
+            effect: 'raven_trust += 1',
+          },
+          { what: 'effect', message: 'The prose adds to trust; the scene already carries that effect.', quote: 'q', variable: { id: 'trust', type: 'number', initial: '0', description: 'x' } },
+          { what: 'gate', message: 'A kind the engine has no word for, so it is dropped.', quote: 'q' },
+          { what: 'condition', message: 'Topic only', quote: 'q' },
+        ],
+        untracked_variables: [
+          { name: 'the raven again', message: 'Proposed twice: once here, once above.', quote: 'q', variable: { id: 'raven_trust', type: 'number', initial: '0', description: 'x' }, effect: 'raven_trust -= 1' },
+          { name: 'how tired Dalia is', message: 'A mood with nothing the engine would write or test.', quote: 'q', variable: { id: 'dalia_fatigue_level', type: 'number', initial: '0', description: 'x' } },
+          { name: 'whether the crossing is open', message: 'Assumed by this page, tested by a condition.', quote: 'q', variable: { id: 'crossing_open', type: 'boolean', initial: 'true', description: 'x' }, condition: 'crossing_open == false' },
+        ],
+      },
+      'the text',
+      dict,
+      1,
+      'scene:the-job-offer',
+    )
+    expect(entry.notes).toEqual([
+      {
+        kind: 'engine',
+        message: 'The prose offers two options that raise or lower a raven variable; the scene has no choices, and no variable tracks the raven.',
+        quote: 'Option 1: "Don’t sass me!" -= to ravens variable',
+        suggestion: 'Put the two options on the scene as choices, each with its effect, and declare raven_trust.',
+        name: 'How far the raven trusts Dalia',
+        defineAs: 'variable',
+        variable: { id: 'raven_trust', type: 'number', initial: '0', description: 'How far the raven trusts Dalia.' },
+        effect: 'raven_trust += 1',
+      },
+      { kind: 'engine', message: 'The prose adds to trust; the scene already carries that effect.', quote: 'q' },
+      {
+        kind: 'define',
+        message: 'Assumed by this page, tested by a condition.',
+        quote: 'q',
+        name: 'whether the crossing is open',
+        defineAs: 'variable',
+        variable: { id: 'crossing_open', type: 'boolean', initial: 'true', description: 'x' },
+      },
+    ])
+  })
+
+  test('a continuity note against the page itself is a draft in progress, kept as a plain note', async () => {
+    const s = await story()
+    const dict = dictionary(s)
+    const blank = { synonyms: [], untracked_entities: [], developments: [], rejected: [] }
+    const notes = ledgerEntryFrom(
+      {
+        ...blank,
+        notes: [
+          { kind: 'continuity', message: 'The second beat has the neighbour, and the prose never reaches it.', quote: 'q', against: { where: 'scene:the-job-offer synopsis', quote: 'Dax lays out the Vault job.' } },
+          { kind: 'continuity', message: 'The prose ends before the beats do, on this same page.', quote: 'q', against: { where: 'scene:the-job-offer', quote: 'Something shifts.' } },
+          { kind: 'continuity', message: 'The Keepers page says one thing and this page says another.', quote: 'q', against: { where: 'lore:the-keepers', quote: 'A Keeper holds the forest.' } },
+        ],
+      },
+      'the text',
+      dict,
+      1,
+      'scene:the-job-offer',
+    ).notes
+    expect(notes).toEqual([
+      { kind: 'other', message: 'The second beat has the neighbour, and the prose never reaches it.', quote: 'q' },
+      { kind: 'other', message: 'The prose ends before the beats do, on this same page.', quote: 'q' },
+      { kind: 'continuity', message: 'The Keepers page says one thing and this page says another.', quote: 'q', against: { where: 'lore:the-keepers', quote: 'A Keeper holds the forest.' } },
+    ])
+  })
+
+  test('a "missing" claim about a page the story has is dropped, however the read spelt the name', async () => {
+    const s = await story()
+    s.references.set('eeltown', { kind: 'place', id: 'eeltown', title: 'Eeltown', tags: [], images: [], aliases: [], body: '' })
+    s.references.set('the-landing', { kind: 'place', id: 'the-landing', title: 'The Landing at Marrow Point', tags: [], images: [], aliases: [], body: '' })
+    const dict = dictionary(s)
+    const claim = (name: string, suggestion = '') => ({ name, kind: 'place', message: `${name} is mentioned, but no place page describes it.`, quote: 'q', suggestion })
+    const output = {
+      synonyms: [],
+      untracked_entities: [
+        claim('Eel town'),
+        claim('the Eel-Town'),
+        claim('Marrow Point', 'No action needed; place:the-landing is already in the library.'),
+        claim('Marrow Point'),
+      ],
+      developments: [],
+      rejected: [],
+      notes: [],
+    }
+    expect(ledgerEntryFrom(output, 'the text', dict, 1, 'scene:the-job-offer').notes.map((n) => n.name)).toEqual(['Marrow Point'])
+  })
+
   test('an unlisted character is a scene\'s business; on a note or a page it is dropped', async () => {
     const s = await story()
     const dict = dictionary(s)
